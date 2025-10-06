@@ -19,3 +19,5 @@ panic = "abort"
 [dependencies]
 # TODO: switch to recent when `bevy_dylib` is updated
 bevy = "0.17.0-rc.2"
+enum-map = "2.7.3"
+ndshape = "0.3.0"
