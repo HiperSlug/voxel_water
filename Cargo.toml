@@ -1,0 +1,21 @@
+[package]
+name = "voxel_water"
+version = "0.1.0"
+edition = "2024"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[dependencies]
+# TODO: switch to recent when `bevy_dylib` is updated
+bevy = "0.17.0-rc.2"
