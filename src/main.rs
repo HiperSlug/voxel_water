@@ -1,6 +1,14 @@
-use bevy::prelude::*;
+mod flycam;
+
+use bevy::{
+    pbr::wireframe::{Wireframe, WireframePlugin},
+    prelude::*,
+    render::RenderDebugFlags,
+};
 use ndshape::{ConstPow2Shape2u32, ConstPow2Shape3u32, ConstShape as _};
 use std::iter;
+
+use crate::flycam::PlayerPlugin;
 
 const BITS: u32 = 6;
 const LEN: usize = 1 << BITS; // 64
@@ -46,7 +54,7 @@ impl Chunk {
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins((DefaultPlugins, PlayerPlugin, WireframePlugin::default()))
         .init_resource::<Chunk>()
         .add_systems(Startup, setup)
         .add_systems(Update, naive_render)
@@ -71,11 +79,6 @@ fn setup(
         mesh: mesh_assets.add(Cuboid::from_length(1.0)),
         material: material_assets.add(Color::WHITE),
     });
-
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(-0.5, -0.5, -0.5).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
 }
 
 fn naive_render(
@@ -86,6 +89,7 @@ fn naive_render(
 ) {
     let mut iter_some = chunk.iter_some();
     let mut iter_last = last.iter_mut();
+
     for ((_, mut transform), translation) in (&mut iter_last).zip(&mut iter_some) {
         transform.translation = translation.as_vec3();
     }
@@ -94,17 +98,13 @@ fn naive_render(
         commands.entity(entity).despawn();
     }
 
-    // allocation unavoidable
-    let batch = iter_some
-        .map(|pos| {
-            (
-                Transform::from_translation(pos.as_vec3()),
-                Mesh3d(handles.mesh.clone()),
-                MeshMaterial3d(handles.material.clone()),
-                CuboidMarker,
-            )
-        })
-        .collect::<Vec<_>>();
-
-    commands.spawn_batch(batch);
+    for pos in iter_some {
+        commands.spawn((
+            Transform::from_translation(pos.as_vec3()),
+            Mesh3d(handles.mesh.clone()),
+            MeshMaterial3d(handles.material.clone()),
+            CuboidMarker,
+            Wireframe,
+        ));
+    }
 }
