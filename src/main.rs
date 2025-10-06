@@ -1,4 +1,4 @@
-use bevy::{math::VectorSpace, prelude::*};
+use bevy::prelude::*;
 use ndshape::{ConstPow2Shape2u32, ConstPow2Shape3u32, ConstShape as _};
 use std::iter;
 
@@ -67,11 +67,10 @@ fn setup(
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
 ) {
-    let handles = Handles {
+    commands.insert_resource(Handles {
         mesh: mesh_assets.add(Cuboid::from_length(1.0)),
         material: material_assets.add(Color::WHITE),
-    };
-    commands.insert_resource(handles);
+    });
 
     commands.spawn((
         Camera3d::default(),
@@ -83,14 +82,20 @@ fn naive_render(
     mut commands: Commands,
     chunk: Res<Chunk>,
     handles: Res<Handles>,
-    last: Query<Entity, With<CuboidMarker>>,
+    mut last: Query<(Entity, &mut Transform), With<CuboidMarker>>,
 ) {
-    for entity in last {
+    let mut iter_some = chunk.iter_some();
+    let mut iter_last = last.iter_mut();
+    for ((_, mut transform), translation) in (&mut iter_last).zip(&mut iter_some) {
+        transform.translation = translation.as_vec3();
+    }
+
+    for (entity, _) in iter_last {
         commands.entity(entity).despawn();
     }
 
-    let batch = chunk
-        .iter_some()
+    // allocation unavoidable
+    let batch = iter_some
         .map(|pos| {
             (
                 Transform::from_translation(pos.as_vec3()),
