@@ -1,63 +1,21 @@
-mod flycam;
+mod chunk;
+pub mod flycam;
+mod mesher;
 
-use bevy::{
-    pbr::wireframe::{Wireframe, WireframePlugin},
-    prelude::*,
-    render::RenderDebugFlags,
-};
-use ndshape::{ConstPow2Shape2u32, ConstPow2Shape3u32, ConstShape as _};
-use std::iter;
+use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
+use bevy::prelude::*;
 
+use crate::chunk::Chunk;
 use crate::flycam::PlayerPlugin;
-
-const BITS: u32 = 6;
-const LEN: usize = 1 << BITS; // 64
-const AREA: usize = LEN * LEN;
-const VOL: usize = LEN * LEN * LEN;
-
-type VolShape = ConstPow2Shape3u32<BITS, BITS, BITS>;
-type AreaShape = ConstPow2Shape2u32<BITS, BITS>;
-
-#[derive(Resource)]
-struct Chunk {
-    some_masks: [u64; AREA],
-}
-
-impl Default for Chunk {
-    fn default() -> Self {
-        Self {
-            some_masks: [u64::MAX; AREA],
-        }
-    }
-}
-
-impl Chunk {
-    fn iter_some(&self) -> impl Iterator<Item = UVec3> {
-        self.some_masks
-            .iter()
-            .enumerate()
-            .flat_map(|(i, some_mask)| {
-                let [y, z] = AreaShape::delinearize(i as u32);
-                let mut some_mask = *some_mask;
-                iter::from_fn(move || {
-                    if some_mask != 0 {
-                        let x = some_mask.trailing_zeros();
-                        some_mask &= some_mask - 1;
-                        Some(uvec3(x, y, z))
-                    } else {
-                        None
-                    }
-                })
-            })
-    }
-}
+use crate::mesher::Mesher;
 
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, PlayerPlugin, WireframePlugin::default()))
         .init_resource::<Chunk>()
+        .init_resource::<Mesher>()
         .add_systems(Startup, setup)
-        .add_systems(Update, naive_render)
+        .add_systems(Update, greedy_mesh_render.run_if(resource_changed::<Chunk>))
         .run();
 }
 
@@ -68,42 +26,52 @@ struct Handles {
 }
 
 #[derive(Component)]
-struct CuboidMarker;
+struct QuadMarker;
 
 fn setup(
     mut commands: Commands,
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
 ) {
+    let mesh = mesh_assets.add(Rectangle::from_length(1.0));
+    let material = material_assets.add(Color::WHITE);
     commands.insert_resource(Handles {
-        mesh: mesh_assets.add(Cuboid::from_length(1.0)),
-        material: material_assets.add(Color::WHITE),
+        mesh: mesh.clone(),
+        material: material.clone(),
     });
+
+    commands.spawn(PointLight::default());
+    commands.spawn((Mesh3d(mesh), MeshMaterial3d(material)));
 }
 
-fn naive_render(
+fn greedy_mesh_render(
     mut commands: Commands,
     chunk: Res<Chunk>,
+    mut mesher: ResMut<Mesher>,
     handles: Res<Handles>,
-    mut last: Query<(Entity, &mut Transform), With<CuboidMarker>>,
+    mut last: Query<(Entity, &mut Transform), With<QuadMarker>>,
 ) {
-    let mut iter_some = chunk.iter_some();
-    let mut iter_last = last.iter_mut();
+    // println!("{chunk:?}"); // !empty
+    mesher.mesh(&chunk);
 
-    for ((_, mut transform), translation) in (&mut iter_last).zip(&mut iter_some) {
-        transform.translation = translation.as_vec3();
+    // println!("{:?}", mesher.quads.len()); // 0
+    let mut quad_iter = mesher.quads.iter().map(|quad| Transform::from(*quad));
+    let mut last_iter = last.iter_mut();
+
+    for ((_, mut transform), new) in (&mut last_iter).zip(&mut quad_iter) {
+        *transform = new;
     }
 
-    for (entity, _) in iter_last {
+    for (entity, _) in last_iter {
         commands.entity(entity).despawn();
     }
 
-    for pos in iter_some {
+    for transform in quad_iter {
         commands.spawn((
-            Transform::from_translation(pos.as_vec3()),
+            transform,
             Mesh3d(handles.mesh.clone()),
             MeshMaterial3d(handles.material.clone()),
-            CuboidMarker,
+            QuadMarker,
             Wireframe,
         ));
     }
