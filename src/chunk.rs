@@ -1,32 +1,17 @@
-pub mod pad {
-    pub const BITS: u32 = 6;
-    pub const LEN: usize = 1 << BITS; // 64
-    pub const AREA: usize = LEN * LEN;
-    // pub const VOL: usize = LEN * LEN * LEN;
-}
-
-pub mod unpad {
-    use super::pad;
-
-    pub const LEN: usize = pad::LEN - 2; // 62
-    // pub const AREA: usize = LEN * LEN;
-    // pub const VOL: usize = LEN * LEN * LEN;
-}
-
 use bevy::prelude::*;
 use ndshape::{ConstPow2Shape2u32, ConstShape as _};
 use rand::random;
 use std::array;
 
-use pad::{AREA, BITS, LEN};
+pub const BITS: u32 = 6;
+pub const LEN: usize = 1 << BITS; // 64
+pub const AREA: usize = LEN * LEN;
+// pub const VOL: usize = LEN * LEN * LEN;
 
 pub type Shape2d = ConstPow2Shape2u32<BITS, BITS>;
 
-pub const SHIFT_0: u32 = Shape2d::SHIFTS[0];
-pub const SHIFT_1: u32 = Shape2d::SHIFTS[1];
-
-pub const STRIDE_0: usize = 1 << SHIFT_0;
-pub const STRIDE_1: usize = 1 << SHIFT_1;
+pub const STRIDE_0: usize = 1 << Shape2d::SHIFTS[0];
+pub const STRIDE_1: usize = 1 << Shape2d::SHIFTS[1];
 
 pub const PAD_MASK: u64 = (1 << 63) | 1;
 
@@ -43,8 +28,7 @@ impl Default for Chunk {
                 if y == 0 || y == LEN as u32 - 1 || z == 0 || z == LEN as u32 - 1 {
                     0
                 } else {
-                    // random::<u64>() & !PAD_MASK
-                    !PAD_MASK
+                    !PAD_MASK & random::<u64>()
                 }
             }),
         }

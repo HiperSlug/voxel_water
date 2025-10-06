@@ -4,7 +4,7 @@ use std::f32::consts::{FRAC_PI_2, PI};
 
 use crate::chunk::{
     Chunk, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d,
-    pad::{AREA, LEN},
+    AREA, LEN,
 };
 
 use Face::*;
@@ -30,41 +30,41 @@ pub struct Quad {
     pub face: Face,
 }
 
-impl From<Quad> for Transform {
-    fn from(value: Quad) -> Self {
-        let pos = value.pos.as_vec3();
-        let scale = value.size.as_vec2().extend(1.0);
-        let half_size = value.size.as_vec2() / 2.0;
+impl Quad {
+    pub fn rectangle_transform(&self) -> Transform {
+        let pos = self.pos.as_vec3();
+        let scale = self.size.as_vec2().extend(1.0);
+        let half_size = self.size.as_vec2() / 2.0;
 
-        match value.face {
-            PosX => Self {
+        match self.face {
+            PosX => Transform {
                 translation: pos + vec3(1.0, half_size.y, half_size.x),
                 rotation: Quat::from_rotation_y(FRAC_PI_2),
                 scale,
             },
-            NegX => Self {
-                translation: pos + vec3(0.0, half_size.y, 1.0 - half_size.x),
+            NegX => Transform {
+                translation: pos + vec3(0.0, half_size.y, half_size.x),
                 rotation: Quat::from_rotation_y(-FRAC_PI_2),
                 scale,
             },
-            PosY => Self {
-                translation: pos + vec3(1.0 + half_size.x, 1.0, half_size.y),
+            PosY => Transform {
+                translation: pos + vec3(half_size.x, 1.0, half_size.y),
                 rotation: Quat::from_rotation_x(-FRAC_PI_2),
                 scale,
             },
-            NegY => Self {
-                translation: pos + vec3(half_size.x, -half_size.y, 1.0),
+            NegY => Transform {
+                translation: pos + vec3(half_size.x, 0.0, half_size.y),
                 rotation: Quat::from_rotation_x(FRAC_PI_2),
                 scale,
             },
-            PosZ => Self {
-                translation: pos,
-                rotation: Quat::from_rotation_y(-PI),
+            PosZ => Transform {
+                translation: pos + vec3( half_size.x, half_size.y, 1.0),
+                rotation: Quat::default(),
                 scale,
             },
-            NegZ => Self {
-                translation: pos + vec3(1.0 - half_size.x, half_size.y, 1.0),
-                rotation: Quat::default(),
+            NegZ => Transform {
+                translation: pos + vec3(half_size.x, half_size.y, 0.0),
+                rotation: Quat::from_rotation_y(-PI),
                 scale,
             },
         }

@@ -1,4 +1,5 @@
 mod chunk;
+// pub so no dead code
 pub mod flycam;
 mod mesher;
 
@@ -41,7 +42,7 @@ fn setup(
     });
 
     commands.spawn(PointLight::default());
-    commands.spawn((Mesh3d(mesh), MeshMaterial3d(material)));
+    commands.spawn((Mesh3d(mesh_assets.add(Sphere::default())), MeshMaterial3d(material)));
 }
 
 fn greedy_mesh_render(
@@ -51,11 +52,9 @@ fn greedy_mesh_render(
     handles: Res<Handles>,
     mut last: Query<(Entity, &mut Transform), With<QuadMarker>>,
 ) {
-    // println!("{chunk:?}"); // !empty
     mesher.mesh(&chunk);
 
-    // println!("{:?}", mesher.quads.len()); // 0
-    let mut quad_iter = mesher.quads.iter().map(|quad| Transform::from(*quad));
+    let mut quad_iter = mesher.quads.iter().map(|quad| quad.rectangle_transform());
     let mut last_iter = last.iter_mut();
 
     for ((_, mut transform), new) in (&mut last_iter).zip(&mut quad_iter) {
