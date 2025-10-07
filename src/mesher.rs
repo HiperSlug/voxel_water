@@ -195,7 +195,6 @@ impl Mesher {
                                     let w = forward_merged + 1;
                                     let h = upward_merged + 1;
 
-                                    let x = x;
                                     let y = y - upward_merged;
                                     let z = z - forward_merged;
 
@@ -248,9 +247,7 @@ impl Mesher {
                                     let w = right_merged;
                                     let h = forward_merged + 1;
 
-                                    let x = x as u32;
-                                    let y = y as u32;
-                                    let z = z as u32 - forward_merged;
+                                    let z = z - forward_merged;
 
                                     let pos = uvec3(x, y, z);
                                     let size = uvec2(w, h);
@@ -301,9 +298,7 @@ impl Mesher {
                                     let w = right_merged;
                                     let h = upward_merged + 1;
 
-                                    let x = x as u32;
-                                    let y = y as u32 - upward_merged;
-                                    let z = z as u32;
+                                    let y = y - upward_merged;
 
                                     let pos = uvec3(x, y, z);
                                     let size = uvec2(w, h);

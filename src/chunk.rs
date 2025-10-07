@@ -22,17 +22,28 @@ pub struct Chunk {
 impl Default for Chunk {
     fn default() -> Self {
         Self {
+            some_mask: [0; AREA],
+        }
+    }
+}
+
+impl Chunk {
+    // dev fn b4 input
+    pub fn nz_init() -> Self {
+        Self {
             some_mask: array::from_fn(|i| {
                 let [y, z] = delinearize_2d(i);
                 if y == 0 || y == LEN as u32 - 1 || z == 0 || z == LEN as u32 - 1 {
                     // u64::MAX
                     0
-                } else if z == LEN as u32 / 2 {
-                    1 << 32
-                    // random::<u64>() |
-                    // !PAD_MASK
+                // } else if z == LEN as u32 / 2 {
+                //     // 1 << 32
+                //     random::<u64>() &
+                //     !PAD_MASK
                 } else {
-                    0
+                    // 0
+                    random::<u64>() &
+                    !PAD_MASK
                 }
             }),
         }

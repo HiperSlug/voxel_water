@@ -7,6 +7,7 @@ mod water;
 use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::prelude::*;
 
+use crate::chunk::Chunk;
 use crate::flycam::PlayerPlugin;
 use crate::mesher::MESHER;
 use crate::water::DoubleBuffered;
@@ -35,6 +36,7 @@ fn setup(
     mut commands: Commands,
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
+    mut chunk: ResMut<DoubleBuffered>,
 ) {
     let mesh = mesh_assets.add(Rectangle::from_length(1.0));
     let material = material_assets.add(Color::WHITE);
@@ -42,6 +44,8 @@ fn setup(
         mesh: mesh.clone(),
         material: material.clone(),
     });
+
+    *chunk.current_mut() = Chunk::nz_init();
 }
 
 fn tick(mut chunk: ResMut<DoubleBuffered>) {
@@ -55,7 +59,7 @@ fn greedy_mesh_render(
     mut last: Query<(&mut Visibility, &mut Transform), With<QuadMarker>>,
 ) {
     MESHER.with_borrow_mut(|mesher| {
-        let quads = mesher.mesh(&chunk.current());
+        let quads = mesher.mesh(chunk.current());
 
         let mut quad_iter = quads.iter().map(|quad| quad.rectangle_transform());
         let mut last_iter = last.iter_mut();
