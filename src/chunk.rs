@@ -1,6 +1,6 @@
 use ndshape::{ConstPow2Shape2u32, ConstShape as _};
+// use rand::random;
 use std::array;
-use rand::random;
 
 pub const BITS: u32 = 6;
 pub const LEN: usize = 1 << BITS; // 64
@@ -36,14 +36,13 @@ impl Chunk {
                 if y == 0 || y == LEN as u32 - 1 || z == 0 || z == LEN as u32 - 1 {
                     // u64::MAX
                     0
-                // } else if z == LEN as u32 / 2 {
-                //     // 1 << 32
-                //     random::<u64>() &
-                //     !PAD_MASK
+                } else if z == LEN as u32 / 2 {
+                    1 << 32
+                    // random::<u64>() &
+                    // !PAD_MASK
                 } else {
-                    // 0
-                    random::<u64>() &
-                    !PAD_MASK
+                    0
+                    // random::<u64>() & !PAD_MASK
                 }
             }),
         }
