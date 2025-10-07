@@ -2,21 +2,23 @@ mod chunk;
 // pub so no dead code
 pub mod flycam;
 mod mesher;
+mod water;
 
 use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::prelude::*;
 
-use crate::chunk::Chunk;
 use crate::flycam::PlayerPlugin;
-use crate::mesher::Mesher;
+use crate::mesher::MESHER;
+use crate::water::DoubleBuffered;
 
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, PlayerPlugin, WireframePlugin::default()))
-        .init_resource::<Chunk>()
-        .init_resource::<Mesher>()
+        .init_resource::<DoubleBuffered>()
         .add_systems(Startup, setup)
-        .add_systems(Update, greedy_mesh_render.run_if(resource_changed::<Chunk>))
+        .insert_resource(Time::<Fixed>::from_hz(5.0))
+        .add_systems(FixedUpdate, tick)
+        .add_systems(Update, greedy_mesh_render) //.run_if(resource_changed::<Chunk>))
         .run();
 }
 
@@ -40,38 +42,41 @@ fn setup(
         mesh: mesh.clone(),
         material: material.clone(),
     });
+}
 
-    commands.spawn(PointLight::default());
-    commands.spawn((Mesh3d(mesh_assets.add(Sphere::default())), MeshMaterial3d(material)));
+fn tick(mut chunk: ResMut<DoubleBuffered>) {
+    chunk.tick();
 }
 
 fn greedy_mesh_render(
     mut commands: Commands,
-    chunk: Res<Chunk>,
-    mut mesher: ResMut<Mesher>,
+    chunk: Res<DoubleBuffered>,
     handles: Res<Handles>,
-    mut last: Query<(Entity, &mut Transform), With<QuadMarker>>,
+    mut last: Query<(&mut Visibility, &mut Transform), With<QuadMarker>>,
 ) {
-    mesher.mesh(&chunk);
+    MESHER.with_borrow_mut(|mesher| {
+        let quads = mesher.mesh(&chunk.current());
 
-    let mut quad_iter = mesher.quads.iter().map(|quad| quad.rectangle_transform());
-    let mut last_iter = last.iter_mut();
+        let mut quad_iter = quads.iter().map(|quad| quad.rectangle_transform());
+        let mut last_iter = last.iter_mut();
 
-    for ((_, mut transform), new) in (&mut last_iter).zip(&mut quad_iter) {
-        *transform = new;
-    }
+        for ((mut visibility, mut transform), new) in (&mut last_iter).zip(&mut quad_iter) {
+            *transform = new;
+            *visibility = Visibility::Visible;
+        }
 
-    for (entity, _) in last_iter {
-        commands.entity(entity).despawn();
-    }
+        for (mut visibility, _) in last_iter {
+            *visibility = Visibility::Hidden;
+        }
 
-    for transform in quad_iter {
-        commands.spawn((
-            transform,
-            Mesh3d(handles.mesh.clone()),
-            MeshMaterial3d(handles.material.clone()),
-            QuadMarker,
-            Wireframe,
-        ));
-    }
+        for transform in quad_iter {
+            commands.spawn((
+                transform,
+                Mesh3d(handles.mesh.clone()),
+                MeshMaterial3d(handles.material.clone()),
+                QuadMarker,
+                Wireframe,
+            ));
+        }
+    })
 }

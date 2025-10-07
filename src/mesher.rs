@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 use enum_map::{Enum, EnumMap, enum_map};
-use std::f32::consts::{FRAC_PI_2, PI};
-
-use crate::chunk::{
-    Chunk, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d,
-    AREA, LEN,
+use std::{
+    cell::RefCell,
+    f32::consts::{FRAC_PI_2, PI},
 };
+
+use crate::chunk::{AREA, Chunk, LEN, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
 
 use Face::*;
 
@@ -58,7 +58,7 @@ impl Quad {
                 scale,
             },
             PosZ => Transform {
-                translation: pos + vec3( half_size.x, half_size.y, 1.0),
+                translation: pos + vec3(half_size.x, half_size.y, 1.0),
                 rotation: Quat::default(),
                 scale,
             },
@@ -71,9 +71,13 @@ impl Quad {
     }
 }
 
-#[derive(Debug, Resource)]
+thread_local! {
+    pub static MESHER: RefCell<Mesher> = default();
+}
+
+#[derive(Debug)]
 pub struct Mesher {
-    pub quads: Vec<Quad>,
+    quads: Vec<Quad>,
     visible_masks: Box<EnumMap<Face, [u64; AREA]>>,
     upward_merged: Box<[u8; LEN]>,
     forward_merged: Box<[u8; AREA]>,
@@ -316,9 +320,10 @@ impl Mesher {
         }
     }
 
-    pub fn mesh(&mut self, chunk: &Chunk) {
+    pub fn mesh(&mut self, chunk: &Chunk) -> &[Quad] {
         self.clear();
         self.build_visible_masks(&chunk.some_mask);
         self.face_merging();
+        &self.quads
     }
 }

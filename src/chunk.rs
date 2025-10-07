@@ -1,7 +1,6 @@
-use bevy::prelude::*;
 use ndshape::{ConstPow2Shape2u32, ConstShape as _};
-use rand::random;
 use std::array;
+use rand::random;
 
 pub const BITS: u32 = 6;
 pub const LEN: usize = 1 << BITS; // 64
@@ -15,7 +14,7 @@ pub const STRIDE_1: usize = 1 << Shape2d::SHIFTS[1];
 
 pub const PAD_MASK: u64 = (1 << 63) | 1;
 
-#[derive(Debug, Resource)]
+#[derive(Debug, Clone)]
 pub struct Chunk {
     pub some_mask: [u64; AREA],
 }
@@ -26,9 +25,14 @@ impl Default for Chunk {
             some_mask: array::from_fn(|i| {
                 let [y, z] = delinearize_2d(i);
                 if y == 0 || y == LEN as u32 - 1 || z == 0 || z == LEN as u32 - 1 {
+                    // u64::MAX
                     0
+                } else if z == LEN as u32 / 2 {
+                    1 << 32
+                    // random::<u64>() |
+                    // !PAD_MASK
                 } else {
-                    !PAD_MASK & random::<u64>()
+                    0
                 }
             }),
         }
