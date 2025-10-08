@@ -8,24 +8,30 @@ mod water;
 
 use std::f32::consts::PI;
 
+use bevy::asset::{embedded_asset, load_embedded_asset};
+use bevy::core_pipeline::Skybox;
 use bevy::pbr::wireframe::Wireframe;
 use bevy::prelude::*;
 
 use crate::chunk::Chunk;
-use crate::flycam::PlayerPlugin;
+use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::mesher::MESHER;
 use crate::water::DoubleBuffered;
 
 fn main() {
-    App::new()
-        .add_plugins((DefaultPlugins, PlayerPlugin, ))
+    let mut app = App::new();
+    app
+        .add_plugins((DefaultPlugins, NoCameraPlayerPlugin))
         // .add_plugins(bevy::pbr::wireframe::WireframePlugin::default())
         .init_resource::<DoubleBuffered>()
         .add_systems(Startup, setup)
         .insert_resource(Time::<Fixed>::from_hz(30.0))
         .add_systems(FixedUpdate, tick)
-        .add_systems(Update, greedy_mesh_render) //.run_if(resource_changed::<Chunk>))
-        .run();
+        .add_systems(Update, (greedy_mesh_render, rotate_skybox));
+
+    embedded_asset!(app, "cubemap.ktx2");
+
+    app.run();
 }
 
 #[derive(Resource)]
@@ -41,6 +47,7 @@ fn setup(
     mut commands: Commands,
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut material_assets: ResMut<Assets<StandardMaterial>>,
+    asset_server: ResMut<AssetServer>,
     mut chunk: ResMut<DoubleBuffered>,
 ) {
     let mesh = mesh_assets.add(Rectangle::from_length(1.0));
@@ -52,8 +59,46 @@ fn setup(
 
     *chunk.front_mut() = Chunk::nz_init();
 
-    commands.spawn((DirectionalLight::default(), Transform::default().looking_at(Vec3::NEG_Y.rotate_towards(Vec3::Z, PI / 5.5).rotate_towards(Vec3::X, PI / 10.5), Vec3::Y)));
+    commands.spawn((
+        DirectionalLight::default(),
+        Transform::default().looking_at(
+            Vec3::NEG_Y
+                .rotate_towards(Vec3::Z, PI / 5.5)
+                .rotate_towards(Vec3::X, PI / 10.5),
+            Vec3::Y,
+        ),
+    ));
+
+    let image = load_embedded_asset!(&*asset_server, "cubemap.ktx2");
+
+    commands.spawn((
+        Transform {
+            translation: vec3(30.0, 85.0, -10.0),
+            rotation: Quat::from_array([0.0, 0.8, 0.5, 0.0]).normalize(),
+            ..default()
+        },
+        Camera3d::default(),
+        Skybox {
+            image,
+            brightness: 1000.0,
+            ..default()
+        },
+        FlyCam,
+    ));
+
+    commands.insert_resource(AmbientLight {
+        color: Color::srgb_u8(210, 220, 240),
+        brightness: 1.0,
+        ..default()
+    });
 }
+
+fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
+    const ANGULAR_VEL: f32 = -0.005;
+    let delta = ANGULAR_VEL * time.delta_secs();
+    skybox.rotation *= Quat::from_rotation_y(delta);
+}
+
 
 fn tick(mut chunk: ResMut<DoubleBuffered>) {
     chunk.tick();

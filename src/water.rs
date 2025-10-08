@@ -1,7 +1,7 @@
-use std::ops::Range;
 use bevy::prelude::*;
 use itertools::Either;
 use rand::{random, seq::SliceRandom};
+use std::ops::Range;
 
 use crate::chunk::{Chunk, LEN, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
 
@@ -49,10 +49,7 @@ impl DoubleBuffered {
                     continue;
                 }
 
-                let mut offsets = [
-                    -STRIDE_Y - STRIDE_Z,
-                    -STRIDE_Y + STRIDE_Z,
-                ];
+                let mut offsets = [-STRIDE_Y - STRIDE_Z, -STRIDE_Y + STRIDE_Z];
                 offsets.shuffle(&mut rand::rng());
 
                 for offset in [-STRIDE_Y].into_iter().chain(offsets) {
@@ -161,7 +158,7 @@ impl DoubleBuffered {
                     some &= !adj_shift;
                     *w_adj_some |= adj_shift >> 1;
                 }
-                
+
                 // we only push remaining cells
                 self.chunks[write_i].some_mask[i] |= some | (PAD_MASK & pad_some);
             }
