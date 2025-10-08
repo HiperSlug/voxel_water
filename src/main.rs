@@ -19,7 +19,7 @@ fn main() {
         .add_plugins((DefaultPlugins, PlayerPlugin, WireframePlugin::default()))
         .init_resource::<DoubleBuffered>()
         .add_systems(Startup, setup)
-        .insert_resource(Time::<Fixed>::from_hz(5.0))
+        .insert_resource(Time::<Fixed>::from_hz(30.0))
         .add_systems(FixedUpdate, tick)
         .add_systems(Update, greedy_mesh_render) //.run_if(resource_changed::<Chunk>))
         .run();

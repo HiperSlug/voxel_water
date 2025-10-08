@@ -88,8 +88,6 @@ impl DoubleBuffered {
                     }
                 }
 
-                let random_mask = random::<u64>();
-
                 let z_mask = random::<u64>();
                 let x_mask = !z_mask;
 
@@ -105,7 +103,7 @@ impl DoubleBuffered {
                     let r_adj_some = self.chunks[read_i].some_mask[adj_i];
                     let w_adj_some = &mut self.chunks[write_i].some_mask[adj_i];
 
-                    let shift = some & z_mask & random_mask & !r_adj_some & !*w_adj_some & r_inv_adj_some;
+                    let shift = some & z_mask & !r_adj_some & !*w_adj_some & r_inv_adj_some;
 
                     some &= !shift;
                     *w_adj_some |= shift;
@@ -125,7 +123,7 @@ impl DoubleBuffered {
                         let r_adj_some = r_adj_some << 1;
                         let w_adj_some = *w_adj_some << 1;
 
-                        some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                        some & x_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
                     };
                     some &= !adj_shift;
                     *w_adj_some |= adj_shift >> 1;
@@ -136,7 +134,7 @@ impl DoubleBuffered {
                         let r_adj_some = r_adj_some >> 1;
                         let w_adj_some = *w_adj_some >> 1;
 
-                        some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                        some & x_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
                     };
                     some &= !adj_shift;
                     *w_adj_some |= adj_shift << 1;
@@ -147,7 +145,7 @@ impl DoubleBuffered {
                         let r_adj_some = r_adj_some >> 1;
                         let w_adj_some = *w_adj_some >> 1;
 
-                        some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                        some & x_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
                     };
                     some &= !adj_shift;
                     *w_adj_some |= adj_shift << 1;
@@ -158,7 +156,7 @@ impl DoubleBuffered {
                         let r_adj_some = r_adj_some << 1;
                         let w_adj_some = *w_adj_some << 1;
 
-                        some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                        some & x_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
                     };
                     some &= !adj_shift;
                     *w_adj_some |= adj_shift >> 1;
