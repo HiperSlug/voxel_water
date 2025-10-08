@@ -1,7 +1,7 @@
 use std::ops::Range;
 use bevy::prelude::*;
 use itertools::Either;
-use rand::random;
+use rand::{random, seq::SliceRandom};
 
 use crate::chunk::{Chunk, LEN, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
 
@@ -38,8 +38,6 @@ impl DoubleBuffered {
 
         for z in range.clone() {
             for y in range.clone() {
-                let y_state = y % 2 == 0;
-
                 let i = linearize_2d([y, z]);
 
                 let pad_some = self.chunks[read_i].some_mask[i];
@@ -49,7 +47,7 @@ impl DoubleBuffered {
                     -STRIDE_Y - STRIDE_Z,
                     -STRIDE_Y + STRIDE_Z,
                 ];
-                let offsets = if y_state {
+                let offsets = if random() {
                     Either::Left(OFFSETS.into_iter())
                 } else {
                     Either::Right(OFFSETS.into_iter().rev())
@@ -88,8 +86,11 @@ impl DoubleBuffered {
                 let z_mask = random::<u64>();
                 let x_mask = !z_mask;
 
+                let mut offsets = [STRIDE_Z, -STRIDE_Z];
+                offsets.shuffle(&mut rand::rng());
+
                 // +- Z
-                for offset in [STRIDE_Z, -STRIDE_Z] {
+                for offset in offsets {
                     let inv_adj_i = (i as isize - offset) as usize;
                     let r_inv_adj_some = self.chunks[read_i].some_mask[inv_adj_i];
 
@@ -106,28 +107,52 @@ impl DoubleBuffered {
                 let r_adj_some = pad_some;
                 let w_adj_some = &mut self.chunks[write_i].some_mask[i];
 
-                // + X
-                let adj_shift = {
-                    let r_inv_adj_some = r_adj_some >> 1;
-                    let r_adj_some = r_adj_some << 1;
-                    let w_adj_some = *w_adj_some << 1;
+                if random() {
+                    // + X
+                    let adj_shift = {
+                        let r_inv_adj_some = r_adj_some >> 1;
+                        let r_adj_some = r_adj_some << 1;
+                        let w_adj_some = *w_adj_some << 1;
 
-                    some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
-                };
-                some &= !adj_shift;
-                *w_adj_some |= adj_shift >> 1;
+                        some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                    };
+                    some &= !adj_shift;
+                    *w_adj_some |= adj_shift >> 1;
 
-                // - X
-                let adj_shift = {
-                    let r_inv_adj_some = r_adj_some << 1;
-                    let r_adj_some = r_adj_some >> 1;
-                    let w_adj_some = *w_adj_some >> 1;
+                    // - X
+                    let adj_shift = {
+                        let r_inv_adj_some = r_adj_some << 1;
+                        let r_adj_some = r_adj_some >> 1;
+                        let w_adj_some = *w_adj_some >> 1;
 
-                    some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
-                };
-                some &= !adj_shift;
-                *w_adj_some |= adj_shift << 1;
+                        some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                    };
+                    some &= !adj_shift;
+                    *w_adj_some |= adj_shift << 1;
+                } else {
+                    // - X
+                    let adj_shift = {
+                        let r_inv_adj_some = r_adj_some << 1;
+                        let r_adj_some = r_adj_some >> 1;
+                        let w_adj_some = *w_adj_some >> 1;
 
+                        some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                    };
+                    some &= !adj_shift;
+                    *w_adj_some |= adj_shift << 1;
+
+                    // + X
+                    let adj_shift = {
+                        let r_inv_adj_some = r_adj_some >> 1;
+                        let r_adj_some = r_adj_some << 1;
+                        let w_adj_some = *w_adj_some << 1;
+
+                        some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                    };
+                    some &= !adj_shift;
+                    *w_adj_some |= adj_shift >> 1;
+                }
+                
                 self.chunks[write_i].some_mask[i] |= some | (PAD_MASK & pad_some);
             }
         }

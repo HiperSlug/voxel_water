@@ -35,13 +35,18 @@ impl Chunk {
                 if y == 0 || y == LEN as u32 - 1 || z == 0 || z == LEN as u32 - 1 {
                     u64::MAX
                     // 0
-                } else if z == LEN as u32 / 2 {
-                    ((1 << 16) - 1) << (16 + 8)
-                    // random::<u64>() &
-                    & !PAD_MASK
+                // } else if z == LEN as u32 / 2 {
+                //     // ((1 << 16) - 1) << (16 + 8)
+                //     rand::random::<u64>()
+                //     & !PAD_MASK
                 } else {
-                    PAD_MASK
-                    // rand::random::<u64>() & !PAD_MASK
+                    if (y % 2 == 0) ^ (z % 2 == 0) {
+                        0xAAAAAAAAAAAAAAAA | PAD_MASK
+                    } else {
+                        0x5555555555555555 | PAD_MASK
+                    }
+                    // PAD_MASK
+                    // rand::random::<u64>() | PAD_MASK
                 }
             }),
         }
