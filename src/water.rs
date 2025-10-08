@@ -8,18 +8,20 @@ use crate::chunk::{Chunk, LEN, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
 #[derive(Default, Resource)]
 pub struct DoubleBuffered {
     chunks: [Chunk; 2],
+    /// false => [Front, Back],
+    /// true => [Back, Front],
     state: bool,
 }
 
 impl DoubleBuffered {
     pub fn front(&self) -> &Chunk {
-        let read_i = self.state as usize;
-        &self.chunks[read_i]
+        let i = self.state as usize;
+        &self.chunks[i]
     }
 
     pub fn front_mut(&mut self) -> &mut Chunk {
-        let read_i = self.state as usize;
-        &mut self.chunks[read_i]
+        let i = self.state as usize;
+        &mut self.chunks[i]
     }
 
     pub fn tick(&mut self) {
@@ -37,21 +39,21 @@ impl DoubleBuffered {
         };
 
         for z in range.clone() {
-            for y in range.clone() {
+            'outer: for y in range.clone() {
                 let i = linearize_2d([y, z]);
 
                 let pad_some = self.chunks[read_i].some_mask[i];
                 let mut some = pad_some & !PAD_MASK;
 
-                const OFFSETS: [isize; 2] = [
+                if some == 0 {
+                    continue;
+                }
+
+                let mut offsets = [
                     -STRIDE_Y - STRIDE_Z,
                     -STRIDE_Y + STRIDE_Z,
                 ];
-                let offsets = if random() {
-                    Either::Left(OFFSETS.into_iter())
-                } else {
-                    Either::Right(OFFSETS.into_iter().rev())
-                };
+                offsets.shuffle(&mut rand::rng());
 
                 for offset in [-STRIDE_Y].into_iter().chain(offsets) {
                     let adj_i = (i as isize + offset) as usize;
@@ -79,6 +81,11 @@ impl DoubleBuffered {
                         some &= !(fall_left >> 1);
                         *w_adj_some |= fall_left;
                     }
+
+                    // we dont need to push nothing to the zeroed write buffer
+                    if some == 0 {
+                        continue 'outer;
+                    }
                 }
 
                 let random_mask = random::<u64>();
@@ -102,6 +109,10 @@ impl DoubleBuffered {
 
                     some &= !shift;
                     *w_adj_some |= shift;
+
+                    if some == 0 {
+                        continue 'outer;
+                    }
                 }
 
                 let r_adj_some = pad_some;
@@ -153,6 +164,7 @@ impl DoubleBuffered {
                     *w_adj_some |= adj_shift >> 1;
                 }
                 
+                // we only push remaining cells
                 self.chunks[write_i].some_mask[i] |= some | (PAD_MASK & pad_some);
             }
         }
