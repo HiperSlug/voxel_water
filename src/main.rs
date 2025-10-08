@@ -7,27 +7,28 @@ mod mesher;
 mod water;
 
 use std::f32::consts::PI;
+use std::time::Duration;
 
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::core_pipeline::Skybox;
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::pbr::wireframe::Wireframe;
 use bevy::prelude::*;
 
-use crate::chunk::Chunk;
+use crate::chunk::{Chunk, LEN};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::mesher::MESHER;
 use crate::water::DoubleBuffered;
 
 fn main() {
     let mut app = App::new();
-    app
-        .add_plugins((DefaultPlugins, NoCameraPlayerPlugin))
+    app.add_plugins((DefaultPlugins, NoCameraPlayerPlugin))
         .add_plugins(bevy::pbr::wireframe::WireframePlugin::default())
         .init_resource::<DoubleBuffered>()
         .add_systems(Startup, setup)
-        .insert_resource(Time::<Fixed>::from_hz(30.0))
+        .insert_resource(Time::<Fixed>::from_hz(10.0))
         .add_systems(FixedUpdate, tick)
-        .add_systems(Update, (greedy_mesh_render, rotate_skybox));
+        .add_systems(Update, (greedy_mesh_render, rotate_skybox, input));
 
     embedded_asset!(app, "cubemap.ktx2");
 
@@ -92,8 +93,11 @@ fn setup(
         ..default()
     });
 
+    let mesh: Mesh = Cuboid::from_length(62.0).into();
+    let mesh = mesh.with_inverted_winding().unwrap();
+
     commands.spawn((
-        Mesh3d(mesh_assets.add(Cuboid::from_length(62.0))),
+        Mesh3d(mesh_assets.add(mesh)),
         MeshMaterial3d(material_assets.add(Color::srgba(1.0, 1.0, 1.0, 0.0))),
         Transform::from_xyz(32.0, 32.0, 32.0),
         Wireframe,
@@ -105,7 +109,6 @@ fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
     let delta = ANGULAR_VEL * time.delta_secs();
     skybox.rotation *= Quat::from_rotation_y(delta);
 }
-
 
 fn tick(mut chunk: ResMut<DoubleBuffered>) {
     chunk.tick();
@@ -142,4 +145,47 @@ fn greedy_mesh_render(
             ));
         }
     })
+}
+
+fn input(
+    mb: Res<ButtonInput<MouseButton>>,
+    mut chunk: ResMut<DoubleBuffered>,
+    transform: Single<&Transform, With<FlyCam>>,
+    mut scroll: MessageReader<MouseWheel>,
+    mut time_step: ResMut<Time<Fixed>>,
+) {
+    const LENGTH: f32 = 20.0;
+
+    let ray = Ray3d::new(transform.translation, transform.forward());
+
+    if mb.pressed(MouseButton::Left) {
+        // if let Some(voxel) = chunk.front().raycast(ray, LENGTH) {
+        //     chunk.front_mut().set(voxel, true);
+        // } else {
+        let voxel = ray.get_point(LENGTH).floor().as_uvec3();
+        if voxel.cmpge(UVec3::ZERO).all() && voxel.cmplt(UVec3::splat(LEN as u32)).all() {
+            chunk.front_mut().set(voxel, true);
+        }
+        // }
+    }
+
+    if mb.pressed(MouseButton::Middle) {
+        if let Some(pos) = chunk.front().raycast(ray, LENGTH) {
+            chunk.front_mut().set(pos, false);
+        }
+    }
+
+    for event in scroll.read() {
+        let scroll = match event.unit {
+            MouseScrollUnit::Line => event.y * 5.0,
+            MouseScrollUnit::Pixel => event.y,
+        };
+
+        let new = time_step
+            .timestep()
+            .mul_f64(1.1f64.powf(scroll as f64))
+            .clamp(Duration::from_secs_f32(1. / 2048.), Duration::from_secs(2));
+
+        time_step.set_timestep(new);
+    }
 }
