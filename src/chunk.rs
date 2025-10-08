@@ -27,21 +27,21 @@ impl Default for Chunk {
 }
 
 impl Chunk {
-    // dev fn b4 input
+    // dev fn to set inital state easily
     pub fn nz_init() -> Self {
         Self {
             some_mask: array::from_fn(|i| {
                 let [y, z] = delinearize_2d(i);
                 if y == 0 || y == LEN as u32 - 1 || z == 0 || z == LEN as u32 - 1 {
-                    // u64::MAX
-                    0
-                // } else if z == LEN as u32 / 2 {
-                //     1 << 32
-                //     // random::<u64>() &
-                //     // !PAD_MASK
-                } else {
+                    u64::MAX
                     // 0
-                    rand::random::<u64>() & !PAD_MASK
+                } else if z == LEN as u32 / 2 {
+                    ((1 << 16) - 1) << (16 + 8)
+                    // random::<u64>() &
+                    & !PAD_MASK
+                } else {
+                    PAD_MASK
+                    // rand::random::<u64>() & !PAD_MASK
                 }
             }),
         }

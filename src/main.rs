@@ -1,3 +1,5 @@
+// TODO: non-random spreading. Instead base it on neighbor state
+
 mod chunk;
 // pub so no dead code
 pub mod flycam;
@@ -17,7 +19,7 @@ fn main() {
         .add_plugins((DefaultPlugins, PlayerPlugin, WireframePlugin::default()))
         .init_resource::<DoubleBuffered>()
         .add_systems(Startup, setup)
-        .insert_resource(Time::<Fixed>::from_hz(60.0))
+        .insert_resource(Time::<Fixed>::from_hz(5.0))
         .add_systems(FixedUpdate, tick)
         .add_systems(Update, greedy_mesh_render) //.run_if(resource_changed::<Chunk>))
         .run();
@@ -45,7 +47,7 @@ fn setup(
         material: material.clone(),
     });
 
-    *chunk.current_mut() = Chunk::nz_init();
+    *chunk.front_mut() = Chunk::nz_init();
 }
 
 fn tick(mut chunk: ResMut<DoubleBuffered>) {
@@ -59,7 +61,7 @@ fn greedy_mesh_render(
     mut last: Query<(&mut Visibility, &mut Transform), With<QuadMarker>>,
 ) {
     MESHER.with_borrow_mut(|mesher| {
-        let quads = mesher.mesh(chunk.current());
+        let quads = mesher.mesh(chunk.front());
 
         let mut quad_iter = quads.iter().map(|quad| quad.rectangle_transform());
         let mut last_iter = last.iter_mut();
