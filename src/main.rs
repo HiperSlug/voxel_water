@@ -22,7 +22,7 @@ fn main() {
     let mut app = App::new();
     app
         .add_plugins((DefaultPlugins, NoCameraPlayerPlugin))
-        // .add_plugins(bevy::pbr::wireframe::WireframePlugin::default())
+        .add_plugins(bevy::pbr::wireframe::WireframePlugin::default())
         .init_resource::<DoubleBuffered>()
         .add_systems(Startup, setup)
         .insert_resource(Time::<Fixed>::from_hz(30.0))
@@ -91,6 +91,13 @@ fn setup(
         brightness: 1.0,
         ..default()
     });
+
+    commands.spawn((
+        Mesh3d(mesh_assets.add(Cuboid::from_length(62.0))),
+        MeshMaterial3d(material_assets.add(Color::srgba(1.0, 1.0, 1.0, 0.0))),
+        Transform::from_xyz(32.0, 32.0, 32.0),
+        Wireframe,
+    ));
 }
 
 fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
@@ -131,7 +138,7 @@ fn greedy_mesh_render(
                 Mesh3d(handles.mesh.clone()),
                 MeshMaterial3d(handles.material.clone()),
                 QuadMarker,
-                Wireframe,
+                // Wireframe,
             ));
         }
     })
