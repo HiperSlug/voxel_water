@@ -6,7 +6,9 @@ pub mod flycam;
 mod mesher;
 mod water;
 
-use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
+use std::f32::consts::PI;
+
+use bevy::pbr::wireframe::Wireframe;
 use bevy::prelude::*;
 
 use crate::chunk::Chunk;
@@ -16,7 +18,8 @@ use crate::water::DoubleBuffered;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, PlayerPlugin, WireframePlugin::default()))
+        .add_plugins((DefaultPlugins, PlayerPlugin, ))
+        // .add_plugins(bevy::pbr::wireframe::WireframePlugin::default())
         .init_resource::<DoubleBuffered>()
         .add_systems(Startup, setup)
         .insert_resource(Time::<Fixed>::from_hz(30.0))
@@ -41,13 +44,15 @@ fn setup(
     mut chunk: ResMut<DoubleBuffered>,
 ) {
     let mesh = mesh_assets.add(Rectangle::from_length(1.0));
-    let material = material_assets.add(Color::WHITE);
+    let material = material_assets.add(Color::srgb_u8(235, 244, 250));
     commands.insert_resource(Handles {
         mesh: mesh.clone(),
         material: material.clone(),
     });
 
     *chunk.front_mut() = Chunk::nz_init();
+
+    commands.spawn((DirectionalLight::default(), Transform::default().looking_at(Vec3::NEG_Y.rotate_towards(Vec3::Z, PI / 5.5).rotate_towards(Vec3::X, PI / 10.5), Vec3::Y)));
 }
 
 fn tick(mut chunk: ResMut<DoubleBuffered>) {
