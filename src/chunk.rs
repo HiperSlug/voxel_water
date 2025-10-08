@@ -1,65 +1,105 @@
+// TODO: don't remove these comments even if they are ugly
+// TODO: research if BVH is a good idea
+
 use bevy::prelude::*;
-use ndshape::{ConstPow2Shape2u32, ConstShape as _};
-use std::array;
+use ndshape::{ConstPow2Shape2u32, ConstPow2Shape3u32, ConstShape as _};
 
 pub const BITS: u32 = 6;
 pub const LEN: usize = 1 << BITS; // 64
+pub const LEN_U32: u32 = LEN as u32;
 pub const AREA: usize = LEN * LEN;
-// pub const VOL: usize = LEN * LEN * LEN;
+pub const VOL: usize = LEN * LEN * LEN;
 
-pub type Shape2d = ConstPow2Shape2u32<BITS, BITS>;
+type Shape2d = ConstPow2Shape2u32<BITS, BITS>;
+type Shape3d = ConstPow2Shape3u32<BITS, BITS, BITS>;
 
-pub const STRIDE_0: usize = 1 << Shape2d::SHIFTS[0];
-pub const STRIDE_1: usize = 1 << Shape2d::SHIFTS[1];
+// STRIDE_* for Shape3d == Shape2d
+pub const STRIDE_0: usize = 1 << Shape3d::SHIFTS[0];
+pub const STRIDE_1: usize = 1 << Shape3d::SHIFTS[1];
+pub const STRIDE_2: usize = 1 << Shape3d::SHIFTS[2];
 
 pub const PAD_MASK: u64 = (1 << 63) | 1;
 
-// BVH
-#[derive(Debug, Clone)]
+// TODO: runtime enumeration/indexing
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Voxel {
+    Liquid, 
+    Solid, 
+}
+
+#[derive(Clone)]
 pub struct Chunk {
+    pub voxels: [Option<Voxel>; VOL],
     pub some_mask: [u64; AREA],
+    pub liquid_mask: [u64; AREA],
 }
 
 impl Default for Chunk {
     fn default() -> Self {
         Self {
-            some_mask: [0; AREA],
+            voxels: [default(); VOL],
+            some_mask: [default(); AREA],
+            liquid_mask: [default(); AREA],
         }
     }
 }
 
 impl Chunk {
-    // dev fn to set inital state easily
-    pub fn nz_init() -> Self {
-        Self {
-            some_mask: array::from_fn(|i| {
-                let [y, z] = delinearize_2d(i);
-                if y == 0 || y == LEN as u32 - 1 || z == 0 || z == LEN as u32 - 1 {
-                    u64::MAX
-                    // 0
-                    // } else if z >= 16 || z < 48 {
-                    // (((1 << 32) - 1) << 16)
-                    // rand::random::<u64>()
-                    // | PAD_MASK
-                } else {
-                    // if (y % 2 == 0) ^ (z % 2 == 0) {
-                    //     0xAAAAAAAAAAAAAAAA | PAD_MASK
-                    // } else {
-                    //     0x5555555555555555 | PAD_MASK
-                    // }
-                    PAD_MASK
-                    // rand::random::<u64>() | PAD_MASK
-                }
-            }),
+    #[inline(never)]
+    pub fn set(&mut self, p: impl Into<[u32; 3]>, v: Option<Voxel>) {
+        let [x, y, z] = p.into();
+        let i_2d = linearize_2d([y, z]);
+        let i_3d = linearize_3d([x, y, z]);
+        
+        self.voxels[i_3d] = v;
+
+        let x_mask = 1 << x;
+        
+        if let Some(voxel) = v {
+            self.some_mask[i_2d] |= x_mask;
+            
+            if let Voxel::Liquid = voxel {
+                self.liquid_mask[i_2d] |= x_mask;
+            } else {
+                self.liquid_mask[i_2d] &= !x_mask;
+            }
+        } else {
+            self.some_mask[i_2d] &= !x_mask;
         }
     }
 
-    pub fn set(&mut self, pos: UVec3, to: bool) {
-        let i = linearize_2d([pos.y, pos.z]);
-        self.some_mask[i] &= !(1 << pos.x);
-        self.some_mask[i] |= (to as u64) << pos.x;
+    pub fn set_padding(&mut self, v: Option<Voxel>) {
+        // +-Z
+        for z in [0, LEN_U32 - 1] {
+            for y in 0..LEN_U32 {
+                for x in 0..LEN_U32 {
+                    self.set([x, y, z], v);
+                }
+            }
+        }
+
+        // +-Y
+        for z in 1..LEN_U32 - 1 {
+            for y in [0, LEN_U32 - 1] {
+                for x in 0..LEN_U32 {
+                    self.set([x, y, z], v);
+                }
+            }
+        }
+
+        // +-X
+        for z in 1..LEN_U32 - 1 {
+            for y in 1..LEN_U32 - 1 {
+                for x in [0, LEN_U32 - 1] {
+                    self.set([x, y, z], v);
+                }
+            }
+        }
     }
 
+    /// # Source
+    /// https://github.com/splashdust/bevy_voxel_world/blob/main/src/voxel_traversal.rs#L93 \
+    /// && http://www.cse.yorku.ca/~amana/research/grid.pdf
     pub fn raycast(&self, ray: Ray3d, max: f32) -> Option<UVec3> {
         let mut voxel = ray.origin.floor().as_ivec3();
 
@@ -111,4 +151,14 @@ pub fn linearize_2d(p: impl Into<[u32; 2]>) -> usize {
 #[inline]
 pub fn delinearize_2d(i: usize) -> [u32; 2] {
     Shape2d::delinearize(i as u32)
+}
+
+#[inline]
+pub fn linearize_3d(p: impl Into<[u32; 3]>) -> usize {
+    Shape3d::linearize(p.into()) as usize
+}
+
+#[inline]
+pub fn delinearize_3d(i: usize) -> [u32; 3] {
+    Shape3d::delinearize(i as u32)
 }

@@ -15,7 +15,7 @@ use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::pbr::wireframe::Wireframe;
 use bevy::prelude::*;
 
-use crate::chunk::{Chunk, LEN};
+use crate::chunk::{Chunk, Voxel, LEN, LEN_U32};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::mesher::MESHER;
 use crate::water::DoubleBuffered;
@@ -58,7 +58,7 @@ fn setup(
         material: material.clone(),
     });
 
-    *chunk.front_mut() = Chunk::nz_init();
+    chunk.front_mut().set_padding(Some(Voxel::Solid));
 
     commands.spawn((
         DirectionalLight::default(),
@@ -163,15 +163,15 @@ fn input(
         //     chunk.front_mut().set(voxel, true);
         // } else {
         let voxel = ray.get_point(LENGTH).floor().as_uvec3();
-        if voxel.cmpge(UVec3::ZERO).all() && voxel.cmplt(UVec3::splat(LEN as u32)).all() {
-            chunk.front_mut().set(voxel, true);
+        if voxel.cmpge(UVec3::ZERO).all() && voxel.cmplt(UVec3::splat(LEN_U32)).all() {
+            chunk.front_mut().set(voxel, None);
         }
         // }
     }
 
     if mb.pressed(MouseButton::Middle) {
         if let Some(pos) = chunk.front().raycast(ray, LENGTH) {
-            chunk.front_mut().set(pos, false);
+            chunk.front_mut().set(pos, None);
         }
     }
 

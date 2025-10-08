@@ -5,7 +5,7 @@ use std::{
     f32::consts::{FRAC_PI_2, PI},
 };
 
-use crate::chunk::{AREA, Chunk, LEN, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
+use crate::chunk::{linearize_2d, Chunk, AREA, LEN, LEN_U32, PAD_MASK, STRIDE_0, STRIDE_1};
 
 use Face::*;
 
@@ -111,8 +111,8 @@ impl Mesher {
         for face in Face::ALL {
             let visible_mask = &mut self.visible_masks[face];
 
-            for z in 1..LEN as u32 - 1 {
-                for y in 1..LEN as u32 - 1 {
+            for z in 1..LEN_U32 - 1 {
+                for y in 1..LEN_U32 - 1 {
                     let i = linearize_2d([y, z]);
 
                     let some = some_mask[i];
@@ -148,8 +148,8 @@ impl Mesher {
 
         for face in Face::ALL {
             let visible_mask = &mut self.visible_masks[face];
-            for z in 1..LEN as u32 - 1 {
-                for y in 1..LEN as u32 - 1 {
+            for z in 1..LEN_U32 - 1 {
+                for y in 1..LEN_U32 - 1 {
                     let i = linearize_2d([y, z]);
 
                     let mut visible = visible_mask[i];
@@ -225,7 +225,7 @@ impl Mesher {
                                 // rightward merging
                                 let mut right_merged = 1;
                                 let mut next_i = forward_i;
-                                for x in x + 1..LEN as u32 - 1 {
+                                for x in x + 1..LEN_U32 - 1 {
                                     next_i += FORWARD_STRIDE_X;
 
                                     if (visible >> x) & 1 == 0
@@ -276,7 +276,7 @@ impl Mesher {
                                 // rightward merging
                                 let mut right_merged = 1;
                                 let mut next_i = upward_i;
-                                for x in x + 1..LEN as u32 - 1 {
+                                for x in x + 1..LEN_U32 - 1 {
                                     next_i += UPWARD_STRIDE_X;
 
                                     if (visible >> x) & 1 == 0

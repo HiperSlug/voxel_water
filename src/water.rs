@@ -3,7 +3,7 @@ use itertools::Either;
 use rand::{random, seq::SliceRandom};
 use std::ops::Range;
 
-use crate::chunk::{Chunk, LEN, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
+use crate::chunk::{linearize_2d, Chunk, LEN, LEN_U32, PAD_MASK, STRIDE_0, STRIDE_1};
 
 #[derive(Default, Resource)]
 pub struct DoubleBuffered {
@@ -31,7 +31,7 @@ impl DoubleBuffered {
         let read_i = self.state as usize;
         let write_i = (!self.state) as usize;
 
-        const RANGE: Range<u32> = 1..LEN as u32 - 1;
+        const RANGE: Range<u32> = 1..LEN_U32 - 1;
         let range = if random() {
             Either::Left(RANGE)
         } else {
@@ -165,16 +165,16 @@ impl DoubleBuffered {
         }
 
         // keep padding b/c single chunk simulation
-        for z in [0, LEN as u32 - 1] {
-            for y in 0..LEN as u32 {
+        for z in [0, LEN_U32 - 1] {
+            for y in 0..LEN_U32 {
                 let i = linearize_2d([y, z]);
 
                 self.chunks[write_i].some_mask[i] |= self.chunks[read_i].some_mask[i]
             }
         }
 
-        for z in 0..LEN as u32 {
-            for y in [0, LEN as u32 - 1] {
+        for z in 0..LEN_U32 {
+            for y in [0, LEN_U32 - 1] {
                 let i = linearize_2d([y, z]);
 
                 self.chunks[write_i].some_mask[i] |= self.chunks[read_i].some_mask[i]
