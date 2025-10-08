@@ -83,43 +83,50 @@ impl DoubleBuffered {
                     }
                 }
 
-                let lateral_mask = random::<u64>();
-                let z_mask = random::<u64>();
-                let pos_mask = random::<u64>();
-                let neg_mask = !pos_mask;
+                let random_mask = random::<u64>();
 
-                let z_shiftable = some & z_mask & lateral_mask;
+                let z_mask = random::<u64>();
+                let x_mask = !z_mask;
 
                 // +- Z
-                for (offset, sign_mask) in [STRIDE_Z, -STRIDE_Z].into_iter().zip([pos_mask, neg_mask]) {
+                for offset in [STRIDE_Z, -STRIDE_Z] {
+                    let inv_adj_i = (i as isize - offset) as usize;
+                    let r_inv_adj_some = self.chunks[read_i].some_mask[inv_adj_i];
+
                     let adj_i = (i as isize + offset) as usize;
                     let r_adj_some = self.chunks[read_i].some_mask[adj_i];
                     let w_adj_some = &mut self.chunks[write_i].some_mask[adj_i];
 
-                    let shift_some = z_shiftable & sign_mask;
-                    let adj_shift = shift_some & !r_adj_some & !*w_adj_some;
+                    let shift = some & z_mask & random_mask & !r_adj_some & !*w_adj_some & r_inv_adj_some;
 
-                    some &= !adj_shift;
-                    *w_adj_some |= adj_shift;
+                    some &= !shift;
+                    *w_adj_some |= shift;
                 }
 
-                let x_mask = !z_mask;
-                let x_shiftable = some & x_mask & lateral_mask;
-
-                let r_adj_some = self.chunks[read_i].some_mask[i];
+                let r_adj_some = pad_some;
                 let w_adj_some = &mut self.chunks[write_i].some_mask[i];
 
                 // + X
-                let shift_some = (x_shiftable & pos_mask) >> 1;
-                let adj_shift = shift_some & !r_adj_some & !*w_adj_some;
-                some &= !(adj_shift << 1);
-                *w_adj_some |= adj_shift;
+                let adj_shift = {
+                    let r_inv_adj_some = r_adj_some >> 1;
+                    let r_adj_some = r_adj_some << 1;
+                    let w_adj_some = *w_adj_some << 1;
+
+                    some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                };
+                some &= !adj_shift;
+                *w_adj_some |= adj_shift >> 1;
 
                 // - X
-                let shift_some = (x_shiftable & neg_mask) << 1;
-                let adj_shift = shift_some & !r_adj_some & !*w_adj_some;
-                some &= !(adj_shift >> 1);
-                *w_adj_some |= adj_shift;
+                let adj_shift = {
+                    let r_inv_adj_some = r_adj_some << 1;
+                    let r_adj_some = r_adj_some >> 1;
+                    let w_adj_some = *w_adj_some >> 1;
+
+                    some & x_mask & random_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
+                };
+                some &= !adj_shift;
+                *w_adj_some |= adj_shift << 1;
 
                 self.chunks[write_i].some_mask[i] |= some | (PAD_MASK & pad_some);
             }
