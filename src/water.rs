@@ -1,10 +1,9 @@
-use std::{iter::Rev, ops::Range};
-
+use std::ops::Range;
 use bevy::prelude::*;
+use itertools::Either;
+use rand::random;
 
 use crate::chunk::{Chunk, LEN, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
-
-// double buffering with first-come-first-serve
 
 #[derive(Default, Resource)]
 pub struct DoubleBuffered {
@@ -24,39 +23,39 @@ impl DoubleBuffered {
     }
 
     pub fn tick(&mut self) {
-        const STRIDE_Y: usize = STRIDE_0;
-        const STRIDE_Z: usize = STRIDE_1;
-
-        const UNPAD_RANGE: Range<u32> = 1..LEN as u32 - 1;
+        const STRIDE_Y: isize = STRIDE_0 as isize;
+        const STRIDE_Z: isize = STRIDE_1 as isize;
 
         let read_i = self.state as usize;
-        let write_i: usize = (!self.state) as usize;
+        let write_i = (!self.state) as usize;
 
+        const RANGE: Range<u32> = 1..LEN as u32 - 1;
         let range = if self.state {
-            OptionalRev::Plain(UNPAD_RANGE)
+            Either::Left(RANGE)
         } else {
-            OptionalRev::Rev(UNPAD_RANGE.rev())
+            Either::Right(RANGE.rev())
         };
 
         for z in range.clone() {
-            for y in range.clone() {
+            'outer: for y in range.clone() {
+                let y_state = y % 2 == 0;
+
                 let i = linearize_2d([y, z]);
 
                 let pad_some = self.chunks[read_i].some_mask[i];
                 let mut some = pad_some & !PAD_MASK;
 
-                const ITER: [isize; 2] = [
-                    -(STRIDE_Y as isize) - STRIDE_Z as isize,
-                    -(STRIDE_Y as isize) + STRIDE_Z as isize,
+                const OFFSETS: [isize; 2] = [
+                    -STRIDE_Y - STRIDE_Z,
+                    -STRIDE_Y + STRIDE_Z,
                 ];
-
-                let iter = if y % 2 == 0 {
-                    OptionalRev::Plain(ITER.into_iter())
+                let offsets = if y_state {
+                    Either::Left(OFFSETS.into_iter())
                 } else {
-                    OptionalRev::Rev(ITER.into_iter().rev())
+                    Either::Right(OFFSETS.into_iter().rev())
                 };
 
-                for offset in [-(STRIDE_Y as isize)].into_iter().chain(iter) {
+                for offset in [-STRIDE_Y].into_iter().chain(offsets) {
                     let adj_i = (i as isize + offset) as usize;
                     let r_adj_some = self.chunks[read_i].some_mask[adj_i];
                     let w_adj_some = &mut self.chunks[write_i].some_mask[adj_i];
@@ -65,48 +64,68 @@ impl DoubleBuffered {
                     some &= !fall;
                     *w_adj_some |= fall;
 
-                    if some == 0 {
-                        break;
-                    }
-
-                    if self.state ^ (y % 2 == 0) {
+                    if self.state ^ y_state {
                         let fall_left = (some << 1) & !r_adj_some & !*w_adj_some;
                         some &= !(fall_left >> 1);
                         *w_adj_some |= fall_left;
 
-                        if some == 0 {
-                            break;
-                        }
-
                         let fall_right = (some >> 1) & !r_adj_some & !*w_adj_some;
                         some &= !(fall_right << 1);
                         *w_adj_some |= fall_right;
-
-                        if some == 0 {
-                            break;
-                        }
                     } else {
                         let fall_right = (some >> 1) & !r_adj_some & !*w_adj_some;
                         some &= !(fall_right << 1);
                         *w_adj_some |= fall_right;
 
-                        if some == 0 {
-                            break;
-                        }
-
                         let fall_left = (some << 1) & !r_adj_some & !*w_adj_some;
                         some &= !(fall_left >> 1);
                         *w_adj_some |= fall_left;
-
-                        if some == 0 {
-                            break;
-                        }
                     }
                 }
+
+                // z must be done first because x might write to z
+                let z_mask = random::<u64>();
+                let pos_mask = random::<u64>();
+                let neg_mask = !pos_mask;
+
+                let z_shiftable = some & z_mask;
+
+                // +- Z
+                for (offset, sign_mask) in [STRIDE_Z, -STRIDE_Z].into_iter().zip([pos_mask, neg_mask]) {
+                    let adj_i = (i as isize + offset) as usize;
+                    let r_adj_some = self.chunks[read_i].some_mask[adj_i];
+                    let w_adj_some = &mut self.chunks[write_i].some_mask[adj_i];
+
+                    let shift_some = z_shiftable & sign_mask;
+                    let adj_shift = shift_some & !r_adj_some & !*w_adj_some;
+
+                    some &= !adj_shift;
+                    *w_adj_some |= adj_shift;
+                }
+
+                let x_mask = !z_mask;
+                let x_shiftable = some & x_mask;
+
+                let r_adj_some = self.chunks[read_i].some_mask[i];
+                let w_adj_some = &mut self.chunks[write_i].some_mask[i];
+
+                // + X
+                let shift_some = (x_shiftable & pos_mask) >> 1;
+                let adj_shift = shift_some & !r_adj_some & !*w_adj_some;
+                some &= !(adj_shift << 1);
+                *w_adj_some |= adj_shift;
+
+                // - X
+                let shift_some = (x_shiftable & neg_mask) << 1;
+                let adj_shift = shift_some & !r_adj_some & !*w_adj_some;
+                some &= !(adj_shift >> 1);
+                *w_adj_some |= adj_shift;
+
                 self.chunks[write_i].some_mask[i] |= some | (PAD_MASK & pad_some);
             }
         }
 
+        // keep padding b/c single chunk simulation
         for z in [0, LEN as u32 - 1] {
             for y in 0..LEN as u32 {
                 let i = linearize_2d([y, z]);
@@ -122,25 +141,10 @@ impl DoubleBuffered {
                 self.chunks[write_i].some_mask[i] |= self.chunks[read_i].some_mask[i]
             }
         }
+
+        // zero next write chunk
         self.chunks[read_i] = default();
 
         self.state = !self.state;
-    }
-}
-
-#[derive(Clone)]
-enum OptionalRev<I> {
-    Plain(I),
-    Rev(Rev<I>),
-}
-
-impl<I: DoubleEndedIterator> Iterator for OptionalRev<I> {
-    type Item = I::Item;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            Self::Plain(i) => i.next(),
-            Self::Rev(i) => i.next(),
-        }
     }
 }

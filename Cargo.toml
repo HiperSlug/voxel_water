@@ -19,5 +19,6 @@ panic = "abort"
 [dependencies]
 bevy = "0.17.2"
 enum-map = "2.7.3"
+itertools = "0.14.0"
 ndshape = "0.3.0"
 rand = "0.9.2"
