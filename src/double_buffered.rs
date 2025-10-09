@@ -23,7 +23,7 @@ impl<T> DoubleBuffered<T> {
         }
     }
 
-    /// [front, back]
+    /// [[front, back]]
     pub fn buffers_mut(&mut self) -> [&mut T; 2] {
         let (left, right) = self.buffers.split_at_mut(1);
         if self.swapped {

@@ -5,7 +5,10 @@ use std::{
     f32::consts::{FRAC_PI_2, PI},
 };
 
-use crate::chunk::{AREA, LEN, LEN_U32, Masks, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
+use crate::chunk::{
+    AREA, Chunk, LEN, LEN_U32, PAD_MASK, STRIDE_0, STRIDE_1, STRIDE_2, Voxel, linearize_2d,
+    linearize_3d,
+};
 
 use Face::*;
 
@@ -28,6 +31,8 @@ pub struct Quad {
     pub pos: UVec3,
     pub size: UVec2,
     pub face: Face,
+    // TODO: runtime texture indexing
+    pub voxel: Voxel,
 }
 
 impl Quad {
@@ -107,9 +112,11 @@ impl Mesher {
         }
     }
 
-    fn build_visible_masks(&mut self, some_mask: &[u64; AREA]) {
+    fn build_visible_masks(&mut self, chunk: &Chunk) {
         const STRIDE_Y: usize = STRIDE_0;
         const STRIDE_Z: usize = STRIDE_1;
+
+        let some_mask = &chunk.masks.front().some_mask;
 
         for face in Face::ALL {
             let visible_mask = &mut self.visible_masks[face];
@@ -140,9 +147,13 @@ impl Mesher {
         }
     }
 
-    fn face_merging(&mut self) {
-        const STRIDE_Y: usize = STRIDE_0;
-        const STRIDE_Z: usize = STRIDE_1;
+    fn face_merging(&mut self, chunk: &Chunk) {
+        const STRIDE_X_3D: usize = STRIDE_0;
+        const STRIDE_Y_3D: usize = STRIDE_1;
+        const STRIDE_Z_3D: usize = STRIDE_2;
+
+        const STRIDE_Y_2D: usize = STRIDE_0;
+        const STRIDE_Z_2D: usize = STRIDE_1;
 
         const FORWARD_STRIDE_X: usize = STRIDE_0;
         const FORWARD_STRIDE_Y: usize = STRIDE_1;
@@ -162,8 +173,8 @@ impl Mesher {
 
                     match face {
                         PosX | NegX => {
-                            let upward_visible = visible_mask[i + STRIDE_Y];
-                            let forward_visible = visible_mask[i + STRIDE_Z];
+                            let upward_visible = visible_mask[i + STRIDE_Y_2D];
+                            let forward_visible = visible_mask[i + STRIDE_Z_2D];
 
                             while visible != 0 {
                                 let x = visible.trailing_zeros();
@@ -172,9 +183,14 @@ impl Mesher {
                                 let upward_i = x as usize;
                                 let forward_i = linearize_2d([x, y]);
 
+                                let i = linearize_3d([x, y, z]);
+                                let voxel_opt = chunk.voxels[i];
+                                let voxel = voxel_opt.unwrap();
+
                                 // forward merging
                                 if self.upward_merged[upward_i] == 0
                                     && (forward_visible >> x) & 1 != 0
+                                    && voxel_opt == chunk.voxels[i + STRIDE_Z_3D]
                                 {
                                     self.forward_merged[forward_i] += 1;
                                     continue;
@@ -184,6 +200,7 @@ impl Mesher {
                                 if (upward_visible >> x) & 1 != 0
                                     && self.forward_merged[forward_i]
                                         == self.forward_merged[forward_i + FORWARD_STRIDE_Y]
+                                    && voxel_opt != chunk.voxels[i + STRIDE_Y_3D]
                                 {
                                     self.forward_merged[forward_i] = 0;
                                     self.upward_merged[upward_i] += 1;
@@ -203,7 +220,12 @@ impl Mesher {
 
                                     let pos = uvec3(x, y, z);
                                     let size = uvec2(w, h);
-                                    Quad { pos, size, face }
+                                    Quad {
+                                        pos,
+                                        size,
+                                        face,
+                                        voxel,
+                                    }
                                 });
 
                                 self.forward_merged[forward_i] = 0;
@@ -211,15 +233,21 @@ impl Mesher {
                             }
                         }
                         PosY | NegY => {
-                            let forward_visible = visible_mask[i + STRIDE_Z];
+                            let forward_visible = visible_mask[i + STRIDE_Z_2D];
 
                             while visible != 0 {
                                 let x = visible.trailing_zeros();
 
                                 let forward_i = linearize_2d([x, y]);
 
+                                let i = linearize_3d([x, y, z]);
+                                let voxel_opt = chunk.voxels[i];
+                                let voxel = voxel_opt.unwrap();
+
                                 // forward merging
-                                if (forward_visible >> x) & 1 != 0 {
+                                if (forward_visible >> x) & 1 != 0
+                                    && voxel_opt == chunk.voxels[i + STRIDE_Y_3D]
+                                {
                                     self.forward_merged[forward_i] += 1;
                                     visible &= visible - 1;
                                     continue;
@@ -227,17 +255,20 @@ impl Mesher {
 
                                 // rightward merging
                                 let mut right_merged = 1;
-                                let mut next_i = forward_i;
+                                let mut forward_next_i = forward_i;
+                                let mut next_i_3d = i;
                                 for x in x + 1..LEN_U32 - 1 {
-                                    next_i += FORWARD_STRIDE_X;
+                                    forward_next_i += FORWARD_STRIDE_X;
+                                    next_i_3d += STRIDE_X_3D;
 
                                     if (visible >> x) & 1 == 0
                                         || self.forward_merged[forward_i]
-                                            != self.forward_merged[next_i]
+                                            != self.forward_merged[forward_next_i]
+                                        || voxel_opt != chunk.voxels[next_i_3d]
                                     {
                                         break;
                                     }
-                                    self.forward_merged[next_i] = 0;
+                                    self.forward_merged[forward_next_i] = 0;
                                     right_merged += 1;
                                 }
                                 let cleared = x + right_merged;
@@ -255,22 +286,33 @@ impl Mesher {
                                     let pos = uvec3(x, y, z);
                                     let size = uvec2(w, h);
 
-                                    Quad { pos, size, face }
+                                    Quad {
+                                        pos,
+                                        size,
+                                        face,
+                                        voxel,
+                                    }
                                 });
 
                                 self.forward_merged[forward_i] = 0
                             }
                         }
                         PosZ | NegZ => {
-                            let upward_visible = visible_mask[i + STRIDE_Y];
+                            let upward_visible = visible_mask[i + STRIDE_Y_2D];
 
                             while visible != 0 {
                                 let x = visible.trailing_zeros();
 
                                 let upward_i = x as usize;
 
+                                let i = linearize_3d([x, y, z]);
+                                let voxel_opt = chunk.voxels[i];
+                                let voxel = voxel_opt.unwrap();
+
                                 // upward merging
-                                if (upward_visible >> x) & 1 != 0 {
+                                if (upward_visible >> x) & 1 != 0
+                                    && voxel_opt == chunk.voxels[i + STRIDE_Y_3D]
+                                {
                                     self.upward_merged[upward_i] += 1;
                                     visible &= visible - 1;
                                     continue;
@@ -278,17 +320,20 @@ impl Mesher {
 
                                 // rightward merging
                                 let mut right_merged = 1;
-                                let mut next_i = upward_i;
+                                let mut upward_next_i = upward_i;
+                                let mut next_i_3d = i;
                                 for x in x + 1..LEN_U32 - 1 {
-                                    next_i += UPWARD_STRIDE_X;
+                                    upward_next_i += UPWARD_STRIDE_X;
+                                    next_i_3d += STRIDE_X_3D;
 
                                     if (visible >> x) & 1 == 0
-                                        || self.upward_merged[upward_i]
-                                            != self.upward_merged[next_i]
+                                        || self.forward_merged[upward_i]
+                                            != self.forward_merged[upward_next_i]
+                                        || voxel_opt == chunk.voxels[next_i_3d]
                                     {
                                         break;
                                     }
-                                    self.upward_merged[next_i] = 0;
+                                    self.forward_merged[upward_next_i] = 0;
                                     right_merged += 1;
                                 }
                                 let cleared = x + right_merged;
@@ -306,7 +351,12 @@ impl Mesher {
                                     let pos = uvec3(x, y, z);
                                     let size = uvec2(w, h);
 
-                                    Quad { pos, size, face }
+                                    Quad {
+                                        pos,
+                                        size,
+                                        face,
+                                        voxel,
+                                    }
                                 });
 
                                 self.upward_merged[upward_i] = 0;
@@ -318,10 +368,10 @@ impl Mesher {
         }
     }
 
-    pub fn mesh(&mut self, chunk: &Masks) -> &[Quad] {
+    pub fn mesh(&mut self, chunk: &Chunk) -> &[Quad] {
         self.clear();
-        self.build_visible_masks(&chunk.some_mask);
-        self.face_merging();
+        self.build_visible_masks(chunk);
+        self.face_merging(chunk);
         &self.quads
     }
 }

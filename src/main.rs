@@ -16,7 +16,7 @@ use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::pbr::wireframe::Wireframe;
 use bevy::prelude::*;
 
-use crate::chunk::{LEN_U32, Voxel};
+use crate::chunk::{Chunk, LEN_U32, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::mesher::MESHER;
 // use crate::water::DoubleBuffered;
@@ -25,7 +25,7 @@ fn main() {
     let mut app = App::new();
     app.add_plugins((DefaultPlugins, NoCameraPlayerPlugin))
         .add_plugins(bevy::pbr::wireframe::WireframePlugin::default())
-        .init_resource::<DoubleBuffered>()
+        .init_resource::<Chunk>()
         .add_systems(Startup, setup)
         .insert_resource(Time::<Fixed>::from_hz(10.0))
         .add_systems(FixedUpdate, water_tick)

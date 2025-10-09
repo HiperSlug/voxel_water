@@ -20,7 +20,7 @@ pub const STRIDE_2: usize = 1 << Shape3d::SHIFTS[2];
 pub const PAD_MASK: u64 = (1 << 63) | 1;
 
 // TODO: runtime enumeration/indexing
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Voxel {
     Liquid,
     Solid,
@@ -28,8 +28,8 @@ pub enum Voxel {
 
 #[derive(Resource)]
 pub struct Chunk {
-    voxels: [Option<Voxel>; VOL],
-    masks: DoubleBuffered<Masks>,
+    pub voxels: [Option<Voxel>; VOL],
+    pub masks: DoubleBuffered<Masks>,
 }
 
 impl Default for Chunk {
