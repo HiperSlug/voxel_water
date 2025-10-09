@@ -3,33 +3,43 @@ use itertools::Either;
 use rand::{random, seq::SliceRandom};
 use std::ops::Range;
 
-use crate::chunk::{linearize_2d, Chunk, LEN, LEN_U32, PAD_MASK, STRIDE_0, STRIDE_1};
+use crate::chunk::{linearize_2d, Masks, Voxel, Voxels, LEN_U32, PAD_MASK, STRIDE_0, STRIDE_1};
 
-#[derive(Default, Resource)]
-pub struct DoubleBuffered {
-    chunks: [Chunk; 2],
-    /// false => [Front, Back],
-    /// true => [Back, Front],
-    state: bool,
-}
 
-impl DoubleBuffered {
-    pub fn front(&self) -> &Chunk {
-        let i = self.state as usize;
-        &self.chunks[i]
+
+impl Chunk {
+    fn zero_and_swap(&mut self) {
+        if self.state {
+            self.masks[0] = default();
+        } else {
+            self.masks[1] = default();
+        }
+        self.state = !self.state
     }
 
-    pub fn front_mut(&mut self) -> &mut Chunk {
-        let i = self.state as usize;
-        &mut self.chunks[i]
+    fn read_write_voxels(&mut self) -> (&Masks, &mut Masks, &mut Voxels) {
+        let (left, right) = self.masks.split_at_mut(1);
+        if self.state {
+            (&left[0], &mut right[0], &mut self.voxels)
+        } else {
+            (&right[0], &mut left[0], &mut self.voxels)
+        }
     }
 
-    pub fn tick(&mut self) {
+    pub fn set(&mut self, p: impl Into<[u32; 3]> + Copy, v: Option<Voxel>) {
+        if self.state {
+            self.masks[0].set(p, v);
+        } else {
+            self.masks[1].set(p, v);
+        }
+        self.voxels.set(p, v);
+    }
+
+    pub fn water_tick(&mut self) {
         const STRIDE_Y: isize = STRIDE_0 as isize;
         const STRIDE_Z: isize = STRIDE_1 as isize;
 
-        let read_i = self.state as usize;
-        let write_i = (!self.state) as usize;
+        let (read, write, voxels) = self.read_write_voxels();
 
         const RANGE: Range<u32> = 1..LEN_U32 - 1;
         let range = if random() {
@@ -42,7 +52,7 @@ impl DoubleBuffered {
             'outer: for y in range.clone() {
                 let i = linearize_2d([y, z]);
 
-                let pad_some = self.chunks[read_i].some_mask[i];
+                let pad_some = read.some_mask[i];
                 let mut some = pad_some & !PAD_MASK;
 
                 if some == 0 {
@@ -54,8 +64,8 @@ impl DoubleBuffered {
 
                 for offset in [-STRIDE_Y].into_iter().chain(offsets) {
                     let adj_i = (i as isize + offset) as usize;
-                    let r_adj_some = self.chunks[read_i].some_mask[adj_i];
-                    let w_adj_some = &mut self.chunks[write_i].some_mask[adj_i];
+                    let r_adj_some = read.some_mask[adj_i];
+                    let w_adj_some = &mut write.some_mask[adj_i];
 
                     let fall = some & !r_adj_some & !*w_adj_some;
                     some &= !fall;
@@ -94,11 +104,11 @@ impl DoubleBuffered {
                 // +- Z
                 for offset in offsets {
                     let inv_adj_i = (i as isize - offset) as usize;
-                    let r_inv_adj_some = self.chunks[read_i].some_mask[inv_adj_i];
+                    let r_inv_adj_some = read.some_mask[inv_adj_i];
 
                     let adj_i = (i as isize + offset) as usize;
-                    let r_adj_some = self.chunks[read_i].some_mask[adj_i];
-                    let w_adj_some = &mut self.chunks[write_i].some_mask[adj_i];
+                    let r_adj_some = read.some_mask[adj_i];
+                    let w_adj_some = &mut write.some_mask[adj_i];
 
                     let shift = some & z_mask & !r_adj_some & !*w_adj_some & r_inv_adj_some;
 
@@ -111,7 +121,7 @@ impl DoubleBuffered {
                 }
 
                 let r_adj_some = pad_some;
-                let w_adj_some = &mut self.chunks[write_i].some_mask[i];
+                let w_adj_some = &mut write.some_mask[i];
 
                 if random() {
                     // + X
@@ -160,7 +170,7 @@ impl DoubleBuffered {
                 }
 
                 // we only push remaining cells
-                self.chunks[write_i].some_mask[i] |= some | (PAD_MASK & pad_some);
+                write.some_mask[i] |= some | (PAD_MASK & pad_some);
             }
         }
 
@@ -169,7 +179,7 @@ impl DoubleBuffered {
             for y in 0..LEN_U32 {
                 let i = linearize_2d([y, z]);
 
-                self.chunks[write_i].some_mask[i] |= self.chunks[read_i].some_mask[i]
+                write.some_mask[i] |= read.some_mask[i]
             }
         }
 
@@ -177,13 +187,10 @@ impl DoubleBuffered {
             for y in [0, LEN_U32 - 1] {
                 let i = linearize_2d([y, z]);
 
-                self.chunks[write_i].some_mask[i] |= self.chunks[read_i].some_mask[i]
+                write.some_mask[i] |= read.some_mask[i]
             }
         }
 
-        // zero next write chunk
-        self.chunks[read_i] = default();
-
-        self.state = !self.state;
+        self.zero_and_swap();
     }
 }

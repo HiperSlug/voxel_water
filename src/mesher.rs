@@ -5,7 +5,7 @@ use std::{
     f32::consts::{FRAC_PI_2, PI},
 };
 
-use crate::chunk::{linearize_2d, Chunk, AREA, LEN, LEN_U32, PAD_MASK, STRIDE_0, STRIDE_1};
+use crate::chunk::{AREA, LEN, LEN_U32, Masks, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
 
 use Face::*;
 
@@ -97,8 +97,11 @@ impl Default for Mesher {
 impl Mesher {
     fn clear(&mut self) {
         self.quads.clear();
+        // TODO: also may not need to be zeroed
         self.upward_merged.fill(0);
+        // TODO: ditto
         self.forward_merged.fill(0);
+        // TODO: ditto
         for (_, arr) in &mut *self.visible_masks {
             arr.fill(0)
         }
@@ -315,7 +318,7 @@ impl Mesher {
         }
     }
 
-    pub fn mesh(&mut self, chunk: &Chunk) -> &[Quad] {
+    pub fn mesh(&mut self, chunk: &Masks) -> &[Quad] {
         self.clear();
         self.build_visible_masks(&chunk.some_mask);
         self.face_merging();

@@ -15,7 +15,7 @@ use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::pbr::wireframe::Wireframe;
 use bevy::prelude::*;
 
-use crate::chunk::{Chunk, Voxel, LEN, LEN_U32};
+use crate::chunk::{LEN_U32, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::mesher::MESHER;
 use crate::water::DoubleBuffered;
@@ -27,10 +27,10 @@ fn main() {
         .init_resource::<DoubleBuffered>()
         .add_systems(Startup, setup)
         .insert_resource(Time::<Fixed>::from_hz(10.0))
-        .add_systems(FixedUpdate, tick)
+        .add_systems(FixedUpdate, water_tick)
         .add_systems(Update, (greedy_mesh_render, rotate_skybox, input));
 
-    embedded_asset!(app, "cubemap.ktx2");
+    embedded_asset!(app, "skybox.ktx2");
 
     app.run();
 }
@@ -58,7 +58,9 @@ fn setup(
         material: material.clone(),
     });
 
-    chunk.front_mut().set_padding(Some(Voxel::Solid));
+    let (m, v) = chunk.front_mut();
+    m.set_padding(Some(Voxel::Solid));
+    v.set_padding(Some(Voxel::Solid));
 
     commands.spawn((
         DirectionalLight::default(),
@@ -70,7 +72,7 @@ fn setup(
         ),
     ));
 
-    let image = load_embedded_asset!(&*asset_server, "cubemap.ktx2");
+    let image = load_embedded_asset!(&*asset_server, "skybox.ktx2");
 
     commands.spawn((
         Transform {
@@ -110,8 +112,8 @@ fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
     skybox.rotation *= Quat::from_rotation_y(delta);
 }
 
-fn tick(mut chunk: ResMut<DoubleBuffered>) {
-    chunk.tick();
+fn water_tick(mut chunk: ResMut<DoubleBuffered>) {
+    chunk.water_tick();
 }
 
 fn greedy_mesh_render(
@@ -121,7 +123,7 @@ fn greedy_mesh_render(
     mut last: Query<(&mut Visibility, &mut Transform), With<QuadMarker>>,
 ) {
     MESHER.with_borrow_mut(|mesher| {
-        let quads = mesher.mesh(chunk.front());
+        let quads = mesher.mesh(chunk.front().0);
 
         let mut quad_iter = quads.iter().map(|quad| quad.rectangle_transform());
         let mut last_iter = last.iter_mut();
@@ -164,15 +166,15 @@ fn input(
         // } else {
         let voxel = ray.get_point(LENGTH).floor().as_uvec3();
         if voxel.cmpge(UVec3::ZERO).all() && voxel.cmplt(UVec3::splat(LEN_U32)).all() {
-            chunk.front_mut().set(voxel, None);
+            chunk.set(voxel, Some(Voxel::Liquid)); 
         }
         // }
     }
 
     if mb.pressed(MouseButton::Middle) {
-        if let Some(pos) = chunk.front().raycast(ray, LENGTH) {
-            chunk.front_mut().set(pos, None);
-        }
+        // if let Some(pos) = chunk.front().1.interior_raycast(ray, LENGTH) {
+            // chunk(pos, None);
+        // }
     }
 
     for event in scroll.read() {
