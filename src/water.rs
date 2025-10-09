@@ -1,185 +1,167 @@
 use bevy::prelude::*;
 use itertools::Either;
-use rand::{random, seq::SliceRandom};
-use std::ops::Range;
+use rand::{Rng, seq::SliceRandom};
 
-use crate::chunk::{
-    Chunk, LEN_U32, Masks, PAD_MASK, STRIDE_0, STRIDE_1, Voxel, Voxels, linearize_2d,
-};
+use crate::chunk::{Chunk, LEN_U32, PAD_MASK, STRIDE_0, STRIDE_1, linearize_2d};
 
 impl Chunk {
-    // fn zero_and_swap(&mut self) {
-    //     if self.state {
-    //         self.masks[0] = default();
-    //     } else {
-    //         self.masks[1] = default();
-    //     }
-    //     self.state = !self.state
-    // }
-
-    // fn read_write_voxels(&mut self) -> (&Masks, &mut Masks, &mut Voxels) {
-    //     let (left, right) = self.masks.split_at_mut(1);
-    //     if self.state {
-    //         (&left[0], &mut right[0], &mut self.voxels)
-    //     } else {
-    //         (&right[0], &mut left[0], &mut self.voxels)
-    //     }
-    // }
-
-    // pub fn set(&mut self, p: impl Into<[u32; 3]> + Copy, v: Option<Voxel>) {
-    //     if self.state {
-    //         self.masks[0].set(p, v);
-    //     } else {
-    //         self.masks[1].set(p, v);
-    //     }
-    //     self.voxels.set(p, v);
-    // }
-
     pub fn liquid_tick(&mut self) {
         const STRIDE_Y: isize = STRIDE_0 as isize;
         const STRIDE_Z: isize = STRIDE_1 as isize;
 
-        let (read, write, voxels) = self.read_write_voxels();
+        let [front, back] = self.masks.buffers_mut();
 
-        const RANGE: Range<u32> = 1..LEN_U32 - 1;
-        let range = if random() {
-            Either::Left(RANGE)
+        // TODO: determine if this makes a difference
+        let range = if self.prng.random() {
+            Either::Left(1..LEN_U32 - 1)
         } else {
-            Either::Right(RANGE.rev())
+            Either::Right((1..LEN_U32 - 1).rev())
         };
 
         for z in range.clone() {
-            'outer: for y in range.clone() {
+            'a: for y in range.clone() {
                 let i = linearize_2d([y, z]);
 
-                let pad_some = read.some_mask[i];
+                let pad_some = front.some_mask[i];
                 let mut some = pad_some & !PAD_MASK;
 
                 if some == 0 {
                     continue;
                 }
 
-                let mut offsets = [-STRIDE_Y - STRIDE_Z, -STRIDE_Y + STRIDE_Z];
-                offsets.shuffle(&mut rand::rng());
+                // down
+                let down_i = (i as isize - STRIDE_Y) as usize;
+                let fall = some & !front.some_mask[down_i] & !back.some_mask[down_i];
+                some &= !fall;
+                back.some_mask[down_i] |= fall;
 
-                for offset in [-STRIDE_Y].into_iter().chain(offsets) {
-                    let adj_i = (i as isize + offset) as usize;
-                    let r_adj_some = read.some_mask[adj_i];
-                    let w_adj_some = &mut write.some_mask[adj_i];
+                if some == 0 {
+                    continue;
+                }
 
-                    let fall = some & !r_adj_some & !*w_adj_some;
-                    some &= !fall;
-                    *w_adj_some |= fall;
+                use Dir::*;
+                #[derive(Clone, Copy)]
+                enum Dir {
+                    PosX,
+                    NegX,
+                    PosZ,
+                    NegZ,
+                }
 
-                    if random() {
-                        let fall_left = (some << 1) & !r_adj_some & !*w_adj_some;
-                        some &= !(fall_left >> 1);
-                        *w_adj_some |= fall_left;
+                // TODO: batch into 4 groups for cellular randomness and drop shuffling. priority wouldn't need to change for each phase.
 
-                        let fall_right = (some >> 1) & !r_adj_some & !*w_adj_some;
-                        some &= !(fall_right << 1);
-                        *w_adj_some |= fall_right;
-                    } else {
-                        let fall_right = (some >> 1) & !r_adj_some & !*w_adj_some;
-                        some &= !(fall_right << 1);
-                        *w_adj_some |= fall_right;
+                let mut dirs = [PosX, NegX, PosZ, NegZ];
+                dirs.shuffle(&mut self.prng);
 
-                        let fall_left = (some << 1) & !r_adj_some & !*w_adj_some;
-                        some &= !(fall_left >> 1);
-                        *w_adj_some |= fall_left;
+                // adjacent
+                for dir in dirs {
+                    match dir {
+                        PosX => {
+                            let fall = (some >> 1) & !front.some_mask[down_i] &!back.some_mask[down_i];
+                            some &= !(fall << 1);
+                            back.some_mask[down_i] |= fall;
+                        },
+                        NegX => {
+                            let fall = (some << 1) & !front.some_mask[down_i] &!back.some_mask[down_i];
+                            some &= !(fall >> 1);
+                            back.some_mask[down_i] |= fall;
+                        },
+                        PosZ => {
+                            let i = (down_i as isize + STRIDE_Z) as usize;
+                            let fall = some & !front.some_mask[i] & !back.some_mask[i];
+                            some &= !fall;
+                            back.some_mask[i] |= fall;
+                        },
+                        NegZ => {
+                            let i = (down_i as isize - STRIDE_Z) as usize;
+                            let fall = some & !front.some_mask[i] & !back.some_mask[i];
+                            some &= !fall;
+                            back.some_mask[i] |= fall;
+                        },
                     }
-
-                    // we dont need to push nothing to the zeroed write buffer
                     if some == 0 {
-                        continue 'outer;
+                        continue 'a;
                     }
                 }
 
-                let z_mask = random::<u64>();
-                let x_mask = !z_mask;
+                dirs.shuffle(&mut self.prng);
 
-                let mut offsets = [STRIDE_Z, -STRIDE_Z];
-                offsets.shuffle(&mut rand::rng());
-
-                // +- Z
-                for offset in offsets {
-                    let inv_adj_i = (i as isize - offset) as usize;
-                    let r_inv_adj_some = read.some_mask[inv_adj_i];
-
-                    let adj_i = (i as isize + offset) as usize;
-                    let r_adj_some = read.some_mask[adj_i];
-                    let w_adj_some = &mut write.some_mask[adj_i];
-
-                    let shift = some & z_mask & !r_adj_some & !*w_adj_some & r_inv_adj_some;
-
-                    some &= !shift;
-                    *w_adj_some |= shift;
-
+                // diagonal
+                for dir in dirs {
+                    match dir {
+                        PosX => {
+                            let i = (down_i as isize - STRIDE_Z) as usize;
+                            let fall = (some >> 1) & !front.some_mask[i] & !back.some_mask[i];
+                            some &= !(fall << 1);
+                            back.some_mask[i] |= fall;
+                        },
+                        NegX => {
+                            let i = (down_i as isize + STRIDE_Z) as usize;
+                            let fall = (some << 1) & !front.some_mask[i] & !back.some_mask[i];
+                            some &= !(fall >> 1);
+                            back.some_mask[i] |= fall;
+                        },
+                        PosZ => {
+                            let i = (down_i as isize + STRIDE_Z) as usize;
+                            let fall = (some >> 1) & !front.some_mask[i] & !back.some_mask[i];
+                            some &= !(fall << 1);
+                            back.some_mask[i] |= fall;
+                        },
+                        NegZ => {
+                            let i = (down_i as isize - STRIDE_Z) as usize;
+                            let fall = (some << 1) & !front.some_mask[i] & !back.some_mask[i];
+                            some &= !(fall >> 1);
+                            back.some_mask[i] |= fall;
+                        },
+                    }
                     if some == 0 {
-                        continue 'outer;
+                        continue 'a;
                     }
                 }
 
-                let r_adj_some = pad_some;
-                let w_adj_some = &mut write.some_mask[i];
+                dirs.shuffle(&mut self.prng);
 
-                if random() {
-                    // + X
-                    let adj_shift = {
-                        let r_inv_adj_some = r_adj_some >> 1;
-                        let r_adj_some = r_adj_some << 1;
-                        let w_adj_some = *w_adj_some << 1;
-
-                        some & x_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
-                    };
-                    some &= !adj_shift;
-                    *w_adj_some |= adj_shift >> 1;
-
-                    // - X
-                    let adj_shift = {
-                        let r_inv_adj_some = r_adj_some << 1;
-                        let r_adj_some = r_adj_some >> 1;
-                        let w_adj_some = *w_adj_some >> 1;
-
-                        some & x_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
-                    };
-                    some &= !adj_shift;
-                    *w_adj_some |= adj_shift << 1;
-                } else {
-                    // - X
-                    let adj_shift = {
-                        let r_inv_adj_some = r_adj_some << 1;
-                        let r_adj_some = r_adj_some >> 1;
-                        let w_adj_some = *w_adj_some >> 1;
-
-                        some & x_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
-                    };
-                    some &= !adj_shift;
-                    *w_adj_some |= adj_shift << 1;
-
-                    // + X
-                    let adj_shift = {
-                        let r_inv_adj_some = r_adj_some >> 1;
-                        let r_adj_some = r_adj_some << 1;
-                        let w_adj_some = *w_adj_some << 1;
-
-                        some & x_mask & !r_adj_some & !w_adj_some & r_inv_adj_some
-                    };
-                    some &= !adj_shift;
-                    *w_adj_some |= adj_shift >> 1;
+                // lateral
+                for dir in dirs {
+                    match dir {
+                        PosX => {
+                            let slide = some & !(front.some_mask[i] << 1) & (front.some_mask[i] >> 1) & (back.some_mask[i] << 1);
+                            some &= !slide;
+                            back.some_mask[i] |= slide >> 1;
+                        },
+                        NegX => {
+                            let slide = some & !(front.some_mask[i] >> 1) & (front.some_mask[i] << 1) & (back.some_mask[i] >> 1);
+                            some &= !slide;
+                            back.some_mask[i] |= slide << 1;
+                        },
+                        PosZ => {
+                            let inv_i = (i as isize - STRIDE_Z) as usize;
+                            let i = (i as isize + STRIDE_Z) as usize;
+                            let slide = some & !front.some_mask[i] & front.some_mask[inv_i] & !back.some_mask[i];
+                            some &= !slide;
+                            back.some_mask[i] |= slide;
+                        },
+                        NegZ => {
+                            let inv_i = (i as isize + STRIDE_Z) as usize;
+                            let i = (i as isize - STRIDE_Z) as usize;
+                            let slide = some & !front.some_mask[i] & front.some_mask[inv_i] & !back.some_mask[i];
+                            some &= !slide;
+                            back.some_mask[i] |= slide;
+                        },
+                    }
+                    if some == 0 {
+                        continue 'a;
+                    }
                 }
-
-                // we only push remaining cells
-                write.some_mask[i] |= some | (PAD_MASK & pad_some);
             }
         }
 
-        // keep padding b/c single chunk simulation
+        // preserving padding
         for z in [0, LEN_U32 - 1] {
             for y in 0..LEN_U32 {
                 let i = linearize_2d([y, z]);
 
-                write.some_mask[i] |= read.some_mask[i]
+                back.some_mask[i] |= front.some_mask[i]
             }
         }
 
@@ -187,10 +169,11 @@ impl Chunk {
             for y in [0, LEN_U32 - 1] {
                 let i = linearize_2d([y, z]);
 
-                write.some_mask[i] |= read.some_mask[i]
+                back.some_mask[i] |= front.some_mask[i]
             }
         }
 
-        self.zero_and_swap();
+        *front = default();
+        self.masks.swap();
     }
 }

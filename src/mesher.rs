@@ -80,6 +80,9 @@ thread_local! {
     pub static MESHER: RefCell<Mesher> = default();
 }
 
+// TODO: iterative meshing
+// TODO: remove scratch `quads`
+// TODO: transparency
 #[derive(Debug)]
 pub struct Mesher {
     quads: Vec<Quad>,
