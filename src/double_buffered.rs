@@ -1,39 +1,35 @@
 #[derive(Debug, Default)]
 pub struct DoubleBuffered<T> {
-    buffers: [T; 2],
-    /// false => [[front, back]], \
-    /// true => [[back, front]],
+    front: T,
+    back: T,
     swapped: bool,
 }
 
 impl<T> DoubleBuffered<T> {
     pub fn front(&self) -> &T {
         if self.swapped {
-            &self.buffers[1]
+            &self.back
         } else {
-            &self.buffers[0]
+            &self.front
         }
     }
 
     pub fn front_mut(&mut self) -> &mut T {
         if self.swapped {
-            &mut self.buffers[1]
+            &mut self.back
         } else {
-            &mut self.buffers[0]
+            &mut self.front
         }
     }
 
-    /// [[front, back]]
-    pub fn buffers_mut(&mut self) -> [&mut T; 2] {
-        let (left, right) = self.buffers.split_at_mut(1);
-        if self.swapped {
-            [&mut right[0], &mut left[0]]
-        } else {
-            [&mut left[0], &mut right[0]]
-        }
-    }
+    pub fn swap_mut(&mut self) -> [&mut T; 2] {
+        let swapped = self.swapped;
+        self.swapped = !swapped;
 
-    pub fn swap(&mut self) {
-        self.swapped = !self.swapped;
+        if swapped {
+            [&mut self.back, &mut self.front]
+        } else {
+            [&mut self.front, &mut self.back]
+        }
     }
 }

@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use ndshape::{ConstPow2Shape2u32, ConstPow2Shape3u32, ConstShape as _};
-use rand::{SeedableRng, rngs::SmallRng};
 
 use crate::double_buffered::DoubleBuffered;
 
@@ -31,7 +30,6 @@ pub enum Voxel {
 pub struct Chunk {
     pub voxels: [Option<Voxel>; VOL],
     pub masks: DoubleBuffered<Masks>,
-    pub prng: SmallRng,
 }
 
 impl Default for Chunk {
@@ -39,7 +37,6 @@ impl Default for Chunk {
         Self {
             voxels: [None; VOL],
             masks: default(),
-            prng: SmallRng::seed_from_u64(0),
         }
     }
 }
