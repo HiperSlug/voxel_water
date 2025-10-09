@@ -1,6 +1,7 @@
 // TODO: non-random spreading. Instead base it on neighbor state
 
 mod chunk;
+mod double_buffered;
 // pub so no dead code
 pub mod flycam;
 mod mesher;
@@ -18,7 +19,7 @@ use bevy::prelude::*;
 use crate::chunk::{LEN_U32, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::mesher::MESHER;
-use crate::water::DoubleBuffered;
+// use crate::water::DoubleBuffered;
 
 fn main() {
     let mut app = App::new();
@@ -166,14 +167,14 @@ fn input(
         // } else {
         let voxel = ray.get_point(LENGTH).floor().as_uvec3();
         if voxel.cmpge(UVec3::ZERO).all() && voxel.cmplt(UVec3::splat(LEN_U32)).all() {
-            chunk.set(voxel, Some(Voxel::Liquid)); 
+            chunk.set(voxel, Some(Voxel::Liquid));
         }
         // }
     }
 
     if mb.pressed(MouseButton::Middle) {
         // if let Some(pos) = chunk.front().1.interior_raycast(ray, LENGTH) {
-            // chunk(pos, None);
+        // chunk(pos, None);
         // }
     }
 

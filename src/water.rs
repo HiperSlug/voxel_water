@@ -3,9 +3,7 @@ use itertools::Either;
 use rand::{random, seq::SliceRandom};
 use std::ops::Range;
 
-use crate::chunk::{linearize_2d, Masks, Voxel, Voxels, LEN_U32, PAD_MASK, STRIDE_0, STRIDE_1};
-
-
+use crate::chunk::{LEN_U32, Masks, PAD_MASK, STRIDE_0, STRIDE_1, Voxel, Voxels, linearize_2d};
 
 impl Chunk {
     fn zero_and_swap(&mut self) {

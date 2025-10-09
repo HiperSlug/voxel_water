@@ -1,8 +1,7 @@
-// TODO: don't remove these comments even if they are ugly
-// TODO: research if BVH is a good idea
-
 use bevy::prelude::*;
 use ndshape::{ConstPow2Shape2u32, ConstPow2Shape3u32, ConstShape as _};
+
+use crate::double_buffered::DoubleBuffered;
 
 pub const BITS: u32 = 6;
 pub const LEN: usize = 1 << BITS; // 64
@@ -20,15 +19,6 @@ pub const STRIDE_2: usize = 1 << Shape3d::SHIFTS[2];
 
 pub const PAD_MASK: u64 = (1 << 63) | 1;
 
-#[derive(Default, Resource)]
-pub struct Chunk {
-    voxels: Voxels,
-    masks: [Masks; 2],
-    /// false => [Front, Back],
-    /// true => [Back, Front],
-    state: bool,
-}
-
 // TODO: runtime enumeration/indexing
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Voxel {
@@ -36,30 +26,39 @@ pub enum Voxel {
     Solid,
 }
 
-pub struct Voxels {
-    pub voxels: [Option<Voxel>; VOL],
+#[derive(Resource)]
+pub struct Chunk {
+    voxels: [Option<Voxel>; VOL],
+    masks: DoubleBuffered<Masks>,
 }
 
-impl Default for Voxels {
+impl Default for Chunk {
     fn default() -> Self {
         Self {
             voxels: [None; VOL],
+            masks: default(),
         }
     }
 }
 
-impl Voxels {
-    pub fn set(&mut self, p: impl Into<[u32; 3]>, v: Option<Voxel>) {
+impl Chunk {
+    pub fn set(&mut self, p: impl Into<[u32; 3]> + Copy, v: Option<Voxel>) {
         let i = linearize_3d(p.into());
         self.voxels[i] = v;
+
+        self.masks.front_mut().set(p, v);
     }
 
     pub fn set_padding(&mut self, v: Option<Voxel>) {
+        let masks = self.masks.front_mut();
+
         // +-Z
         for z in [0, LEN_U32 - 1] {
             for y in 0..LEN_U32 {
+                masks.set_row([y, z], v);
                 for x in 0..LEN_U32 {
-                    self.set([x, y, z], v);
+                    let i = linearize_3d([x, y, z]);
+                    self.voxels[i] = v;
                 }
             }
         }
@@ -67,8 +66,10 @@ impl Voxels {
         // +-Y
         for z in 1..LEN_U32 - 1 {
             for y in [0, LEN_U32 - 1] {
+                masks.set_row([y, z], v);
                 for x in 0..LEN_U32 {
-                    self.set([x, y, z], v);
+                    let i = linearize_3d([x, y, z]);
+                    self.voxels[i] = v;
                 }
             }
         }
@@ -76,62 +77,65 @@ impl Voxels {
         // +-X
         for z in 1..LEN_U32 - 1 {
             for y in 1..LEN_U32 - 1 {
+                masks.set_padding([y, z], v);
                 for x in [0, LEN_U32 - 1] {
-                    self.set([x, y, z], v);
+                    let i = linearize_3d([x, y, z]);
+                    self.voxels[i] = v;
                 }
             }
         }
     }
 
-    /// # Source
-    /// https://github.com/splashdust/bevy_voxel_world/blob/main/src/voxel_traversal.rs#L93 \
-    /// && http://www.cse.yorku.ca/~amana/research/grid.pdf
-    ///
-    /// TODO: move this? maybe compute on the mask for locality
-    pub fn interior_raycast(&self, ray: Ray3d, max: f32) -> Option<UVec3> {
-        todo!()
+    /// # Panic
+    /// - axial rays
+    pub fn raycast(&self, ray: Ray3d, max: f32) -> Option<UVec3> {
+        let masks = self.masks.front();
+
+        let origin = ray.origin.to_vec3a();
+        let dir = ray.direction.to_vec3a();
+
+        let mut pos = origin.floor().as_ivec3();
+        // dir
+        let step = dir.signum().as_ivec3();
+
+        // magnitude
+        let t_delta = dir.recip().abs();
+        let mut t_max = (pos.as_vec3a() + step.max(IVec3::ZERO).as_vec3a() - origin) / dir;
+
+        let mut last = None;
+
+        loop {
+            let in_unpad_bounds =
+                pos.cmpge(IVec3::ONE).all() && pos.cmplt(IVec3::splat(LEN as i32 - 1)).all();
+            if in_unpad_bounds {
+                let pos = pos.as_uvec3();
+                if masks.is_some(pos) {
+                    return Some(pos);
+                }
+                last = Some(pos);
+            }
+
+            if t_max.x < t_max.y && t_max.x < t_max.z {
+                pos.x += step.x;
+                t_max.x += t_delta.x;
+                if t_max.x > max {
+                    return last;
+                }
+            } else if t_max.y < t_max.z {
+                pos.y += step.y;
+                t_max.y += t_delta.y;
+                if t_max.y > max {
+                    return last;
+                }
+            } else {
+                pos.z += step.z;
+                t_max.z += t_delta.z;
+                if t_max.z > max {
+                    return last;
+                }
+            }
+        }
     }
-    //     // TODO: debug
-    //     let mut voxel = ray.origin.floor().as_ivec3();
-
-    //     let step = ray.direction.signum().as_ivec3();
-
-    //     let t_delta = ray.direction.abs().recip();
-    //     let mut t_max =
-    //         (voxel.as_vec3() + step.max(IVec3::ZERO).as_vec3() - ray.origin) / *ray.direction;
-
-    //     let mut last = None;
-
-    //     loop {
-    //         if voxel.cmpge(IVec3::ONE).all() && voxel.cmplt(IVec3::splat(LEN as i32 - 1)).all() {
-    //             let i = linearize_2d([voxel.y as u32, voxel.z as u32]);
-    //             if (self.some_mask[i] >> voxel.x) & 1 != 0 {
-    //                 return Some(voxel.as_uvec3());
-    //             }
-    //             last = Some(voxel.as_uvec3());
-    //         }
-
-    //         if t_max.x < t_max.y && t_max.x < t_max.z {
-    //             voxel.x += step.x;
-    //             t_max.x += t_delta.x;
-    //             if t_max.x.abs() > max {
-    //                 return last;
-    //             }
-    //         } else if t_max.y < t_max.z {
-    //             voxel.y += step.y;
-    //             t_max.y += t_delta.y;
-    //             if t_max.y.abs() > max {
-    //                 return last;
-    //             }
-    //         } else {
-    //             voxel.z += step.z;
-    //             t_max.z += t_delta.z;
-    //             if t_max.z.abs() > max {
-    //                 return last;
-    //             }
-    //         }
-    //     }
-    // }
 }
 
 #[derive(Clone)]
@@ -190,7 +194,7 @@ impl Masks {
         }
     }
 
-    pub fn set_row_padding(&mut self, p: impl Into<[u32; 2]>, v: Option<Voxel>) {
+    pub fn set_padding(&mut self, p: impl Into<[u32; 2]>, v: Option<Voxel>) {
         let i = linearize_2d(p);
 
         match v {
@@ -209,27 +213,11 @@ impl Masks {
         }
     }
 
-    pub fn set_padding(&mut self, v: Option<Voxel>) {
-        // +-Z
-        for z in [0, LEN_U32 - 1] {
-            for y in 0..LEN_U32 {
-                self.set_row([y, z], v);
-            }
-        }
+    pub fn is_some(&self, p: impl Into<[u32; 3]>) -> bool {
+        let [x, y, z] = p.into();
+        let i = linearize_2d([y, z]);
 
-        // +-Y
-        for z in 1..LEN_U32 - 1 {
-            for y in [0, LEN_U32 - 1] {
-                self.set_row([y, z], v);
-            }
-        }
-
-        // +-X
-        for z in 1..LEN_U32 - 1 {
-            for y in 1..LEN_U32 - 1 {
-                self.set_row_padding([y, z], v);
-            }
-        }
+        self.some_mask[i] & (1 << x) != 0
     }
 }
 
