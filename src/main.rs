@@ -12,34 +12,61 @@ use std::time::Duration;
 
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::core_pipeline::Skybox;
-use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
-use bevy::pbr::wireframe::Wireframe;
+use bevy::input::mouse::MouseWheel;
+use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::prelude::*;
 
 use crate::chunk::{Chunk, LEN_U32, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::mesher::MESHER;
-// use crate::water::DoubleBuffered;
+
+const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
+const MAX_TIMESTEP: Duration = Duration::from_secs(2);
 
 fn main() {
     let mut app = App::new();
-    app.add_plugins((DefaultPlugins, NoCameraPlayerPlugin))
-        .add_plugins(bevy::pbr::wireframe::WireframePlugin::default())
-        .init_resource::<Chunk>()
-        .add_systems(Startup, setup)
-        .insert_resource(Time::<Fixed>::from_hz(10.0))
-        .add_systems(FixedUpdate, water_tick)
-        .add_systems(Update, (greedy_mesh_render, rotate_skybox, input));
+    app.add_plugins((
+        DefaultPlugins,
+        NoCameraPlayerPlugin,
+        WireframePlugin::default(),
+        Game,
+    ))
+    .add_systems(Startup, setup)
+    .run();
+}
 
-    embedded_asset!(app, "skybox.ktx2");
+struct Game;
 
-    app.run();
+impl Plugin for Game {
+    fn build(&self, app: &mut App) {
+        embedded_asset!(app, "skybox.ktx2");
+
+        app.insert_resource(Time::<Fixed>::from_hz(10.0))
+            .init_resource::<Chunk>();
+
+        app.add_systems(Startup, init_quad_handles)
+            .add_systems(FixedUpdate, liquid_tick)
+            .add_systems(Update, (render_chunk, rotate_skybox, input));
+    }
 }
 
 #[derive(Resource)]
-struct Handles {
-    mesh: Handle<Mesh>,
-    material: Handle<StandardMaterial>,
+struct QuadHandles {
+    quad: Handle<Mesh>,
+    liquid: Handle<StandardMaterial>,
+    solid: Handle<StandardMaterial>,
+}
+
+fn init_quad_handles(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    commands.insert_resource(QuadHandles {
+        quad: meshes.add(Rectangle::from_length(1.0)),
+        liquid: materials.add(Color::srgb_u8(235, 244, 250)),
+        solid: materials.add(Color::srgb_u8(235, 244, 250).darker(0.7)),
+    });
 }
 
 #[derive(Component)]
@@ -47,22 +74,14 @@ struct QuadMarker;
 
 fn setup(
     mut commands: Commands,
-    mut mesh_assets: ResMut<Assets<Mesh>>,
-    mut material_assets: ResMut<Assets<StandardMaterial>>,
+    mut chunk: ResMut<Chunk>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: ResMut<AssetServer>,
-    mut chunk: ResMut<DoubleBuffered>,
 ) {
-    let mesh = mesh_assets.add(Rectangle::from_length(1.0));
-    let material = material_assets.add(Color::srgb_u8(235, 244, 250));
-    commands.insert_resource(Handles {
-        mesh: mesh.clone(),
-        material: material.clone(),
-    });
+    chunk.set_padding(Some(Voxel::Solid));
 
-    let (m, v) = chunk.front_mut();
-    m.set_padding(Some(Voxel::Solid));
-    v.set_padding(Some(Voxel::Solid));
-
+    // light
     commands.spawn((
         DirectionalLight::default(),
         Transform::default().looking_at(
@@ -73,78 +92,92 @@ fn setup(
         ),
     ));
 
-    let image = load_embedded_asset!(&*asset_server, "skybox.ktx2");
-
+    // player
     commands.spawn((
         Transform {
             translation: vec3(30.0, 85.0, -10.0),
             rotation: Quat::from_array([0.0, 0.8, 0.5, 0.0]).normalize(),
             ..default()
         },
-        Camera3d::default(),
         Skybox {
-            image,
+            image: load_embedded_asset!(&*asset_server, "skybox.ktx2"),
             brightness: 1000.0,
             ..default()
         },
+        Camera3d::default(),
         FlyCam,
     ));
 
-    commands.insert_resource(AmbientLight {
-        color: Color::srgb_u8(210, 220, 240),
-        brightness: 1.0,
-        ..default()
-    });
-
-    let mesh: Mesh = Cuboid::from_length(62.0).into();
-    let mesh = mesh.with_inverted_winding().unwrap();
-
+    // chunk aabb
     commands.spawn((
-        Mesh3d(mesh_assets.add(mesh)),
-        MeshMaterial3d(material_assets.add(Color::srgba(1.0, 1.0, 1.0, 0.0))),
+        Mesh3d(
+            meshes.add(
+                Cuboid::from_length(62.0)
+                    .mesh()
+                    .build()
+                    .with_inverted_winding()
+                    .unwrap(),
+            ),
+        ),
+        MeshMaterial3d(materials.add(Color::srgba(1.0, 1.0, 1.0, 0.0))),
         Transform::from_xyz(32.0, 32.0, 32.0),
         Wireframe,
     ));
 }
 
 fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
-    const ANGULAR_VEL: f32 = -0.005;
+    const ANGULAR_VEL: f32 = -0.003;
     let delta = ANGULAR_VEL * time.delta_secs();
     skybox.rotation *= Quat::from_rotation_y(delta);
 }
 
-fn water_tick(mut chunk: ResMut<DoubleBuffered>) {
-    chunk.water_tick();
+fn liquid_tick(mut chunk: ResMut<Chunk>) {
+    chunk.liquid_tick();
 }
 
-fn greedy_mesh_render(
+fn render_chunk(
     mut commands: Commands,
-    chunk: Res<DoubleBuffered>,
-    handles: Res<Handles>,
-    mut last: Query<(&mut Visibility, &mut Transform), With<QuadMarker>>,
+    chunk: Res<Chunk>,
+    handles: Res<QuadHandles>,
+    mut old_quads: Query<
+        (
+            &mut Visibility,
+            &mut Transform,
+            &mut MeshMaterial3d<StandardMaterial>,
+        ),
+        With<QuadMarker>,
+    >,
 ) {
     MESHER.with_borrow_mut(|mesher| {
-        let quads = mesher.mesh(chunk.front().0);
+        let quads = mesher.mesh(&chunk);
 
-        let mut quad_iter = quads.iter().map(|quad| quad.rectangle_transform());
-        let mut last_iter = last.iter_mut();
+        let mut new_iter = quads.iter();
+        let mut old_iter = old_quads.iter_mut();
 
-        for ((mut visibility, mut transform), new) in (&mut last_iter).zip(&mut quad_iter) {
-            *transform = new;
+        for ((mut visibility, mut transform, mut material), quad) in
+            (&mut old_iter).zip(&mut new_iter)
+        {
+            *transform = quad.rectangle_transform();
             *visibility = Visibility::Visible;
+            material.0 = match quad.voxel {
+                Voxel::Liquid => handles.liquid.clone(),
+                Voxel::Solid => handles.solid.clone(),
+            };
         }
 
-        for (mut visibility, _) in last_iter {
+        for (mut visibility, _, _) in old_iter {
             *visibility = Visibility::Hidden;
         }
 
-        for transform in quad_iter {
+        for quad in new_iter {
             commands.spawn((
-                transform,
-                Mesh3d(handles.mesh.clone()),
-                MeshMaterial3d(handles.material.clone()),
+                quad.rectangle_transform(),
+                Mesh3d(handles.quad.clone()),
+                MeshMaterial3d(match quad.voxel {
+                    Voxel::Liquid => handles.liquid.clone(),
+                    Voxel::Solid => handles.solid.clone(),
+                }),
                 QuadMarker,
-                // Wireframe,
             ));
         }
     })
@@ -152,42 +185,36 @@ fn greedy_mesh_render(
 
 fn input(
     mb: Res<ButtonInput<MouseButton>>,
-    mut chunk: ResMut<DoubleBuffered>,
+    mut chunk: ResMut<Chunk>,
     transform: Single<&Transform, With<FlyCam>>,
     mut scroll: MessageReader<MouseWheel>,
     mut time_step: ResMut<Time<Fixed>>,
 ) {
-    const LENGTH: f32 = 20.0;
-
+    const LEN: f32 = 20.0;
     let ray = Ray3d::new(transform.translation, transform.forward());
 
     if mb.pressed(MouseButton::Left) {
-        // if let Some(voxel) = chunk.front().raycast(ray, LENGTH) {
-        //     chunk.front_mut().set(voxel, true);
-        // } else {
-        let voxel = ray.get_point(LENGTH).floor().as_uvec3();
-        if voxel.cmpge(UVec3::ZERO).all() && voxel.cmplt(UVec3::splat(LEN_U32)).all() {
-            chunk.set(voxel, Some(Voxel::Liquid));
+        if let Some(p) = chunk.raycast(ray, LEN) {
+            chunk.set(p, Some(Voxel::Liquid));
+        } else {
+            let p = ray.get_point(LEN).floor().as_uvec3();
+            if p.cmpge(UVec3::ONE).all() && p.cmplt(UVec3::splat(LEN_U32 - 1)).all() {
+                chunk.set(p, Some(Voxel::Liquid));
+            }
         }
-        // }
     }
 
     if mb.pressed(MouseButton::Middle) {
-        // if let Some(pos) = chunk.front().1.interior_raycast(ray, LENGTH) {
-        // chunk(pos, None);
-        // }
+        if let Some(p) = chunk.raycast(ray, LEN) {
+            chunk.set(p, None);
+        }
     }
 
     for event in scroll.read() {
-        let scroll = match event.unit {
-            MouseScrollUnit::Line => event.y * 5.0,
-            MouseScrollUnit::Pixel => event.y,
-        };
-
         let new = time_step
             .timestep()
-            .mul_f64(1.1f64.powf(scroll as f64))
-            .clamp(Duration::from_secs_f32(1. / 2048.), Duration::from_secs(2));
+            .mul_f64(1.1f64.powf(event.y as f64))
+            .clamp(MIN_TIMESTEP, MAX_TIMESTEP);
 
         time_step.set_timestep(new);
     }

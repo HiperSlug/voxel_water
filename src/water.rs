@@ -3,37 +3,39 @@ use itertools::Either;
 use rand::{random, seq::SliceRandom};
 use std::ops::Range;
 
-use crate::chunk::{LEN_U32, Masks, PAD_MASK, STRIDE_0, STRIDE_1, Voxel, Voxels, linearize_2d};
+use crate::chunk::{
+    Chunk, LEN_U32, Masks, PAD_MASK, STRIDE_0, STRIDE_1, Voxel, Voxels, linearize_2d,
+};
 
 impl Chunk {
-    fn zero_and_swap(&mut self) {
-        if self.state {
-            self.masks[0] = default();
-        } else {
-            self.masks[1] = default();
-        }
-        self.state = !self.state
-    }
+    // fn zero_and_swap(&mut self) {
+    //     if self.state {
+    //         self.masks[0] = default();
+    //     } else {
+    //         self.masks[1] = default();
+    //     }
+    //     self.state = !self.state
+    // }
 
-    fn read_write_voxels(&mut self) -> (&Masks, &mut Masks, &mut Voxels) {
-        let (left, right) = self.masks.split_at_mut(1);
-        if self.state {
-            (&left[0], &mut right[0], &mut self.voxels)
-        } else {
-            (&right[0], &mut left[0], &mut self.voxels)
-        }
-    }
+    // fn read_write_voxels(&mut self) -> (&Masks, &mut Masks, &mut Voxels) {
+    //     let (left, right) = self.masks.split_at_mut(1);
+    //     if self.state {
+    //         (&left[0], &mut right[0], &mut self.voxels)
+    //     } else {
+    //         (&right[0], &mut left[0], &mut self.voxels)
+    //     }
+    // }
 
-    pub fn set(&mut self, p: impl Into<[u32; 3]> + Copy, v: Option<Voxel>) {
-        if self.state {
-            self.masks[0].set(p, v);
-        } else {
-            self.masks[1].set(p, v);
-        }
-        self.voxels.set(p, v);
-    }
+    // pub fn set(&mut self, p: impl Into<[u32; 3]> + Copy, v: Option<Voxel>) {
+    //     if self.state {
+    //         self.masks[0].set(p, v);
+    //     } else {
+    //         self.masks[1].set(p, v);
+    //     }
+    //     self.voxels.set(p, v);
+    // }
 
-    pub fn water_tick(&mut self) {
+    pub fn liquid_tick(&mut self) {
         const STRIDE_Y: isize = STRIDE_0 as isize;
         const STRIDE_Z: isize = STRIDE_1 as isize;
 
