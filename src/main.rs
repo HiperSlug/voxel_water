@@ -5,7 +5,6 @@ mod double_buffered;
 // pub so no dead code
 pub mod flycam;
 mod mesher;
-mod water;
 
 use std::f32::consts::PI;
 use std::time::Duration;
