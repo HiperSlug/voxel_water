@@ -224,17 +224,17 @@ impl Chunk {
                         let (rm, add, src_i_2d, dst_i_2d, stride_3d) = match dir {
                             PosX => {
                                 let fall =
-                                    (group >> 1) & !read.some_mask[ny_i] & !write.some_mask[ny_i];
+                                    (group << 1) & !read.some_mask[ny_i] & !write.some_mask[ny_i];
 
                                 const STRIDE_3D: isize = STRIDE_X_3D - STRIDE_Y_3D;
-                                (fall << 1, fall, i, ny_i, STRIDE_3D)
+                                (fall >> 1, fall, i, ny_i, STRIDE_3D)
                             }
                             NegX => {
                                 let fall =
-                                    (group << 1) & !read.some_mask[ny_i] & !write.some_mask[ny_i];
+                                    (group >> 1) & !read.some_mask[ny_i] & !write.some_mask[ny_i];
 
                                 const STRIDE_3D: isize = -STRIDE_X_3D - STRIDE_Y_3D;
-                                (fall >> 1, fall, i, ny_i, STRIDE_3D)
+                                (fall << 1, fall, i, ny_i, STRIDE_3D)
                             }
                             PosZ => {
                                 let fall =
@@ -283,36 +283,36 @@ impl Chunk {
 
                         let (rm, add, src_i_2d, dst_i_2d, stride_3d) = match dir {
                             PosX => {
-                                let fall = (group >> 1)
+                                let fall = (group << 1)
                                     & !read.some_mask[ny_nz_i]
                                     & !write.some_mask[ny_nz_i];
 
                                 const STRIDE_3D: isize = STRIDE_X_3D - STRIDE_Y_3D - STRIDE_Z_3D;
-                                (fall << 1, fall, i, ny_nz_i, STRIDE_3D)
+                                (fall >> 1, fall, i, ny_nz_i, STRIDE_3D)
                             }
                             NegX => {
-                                let fall = (group << 1)
-                                    & !read.some_mask[ny_pz_i]
-                                    & !write.some_mask[ny_pz_i];
-
-                                const STRIDE_3D: isize = -STRIDE_X_3D - STRIDE_Y_3D + STRIDE_Z_3D;
-                                (fall >> 1, fall, i, ny_pz_i, STRIDE_3D)
-                            }
-                            PosZ => {
                                 let fall = (group >> 1)
                                     & !read.some_mask[ny_pz_i]
                                     & !write.some_mask[ny_pz_i];
 
-                                const STRIDE_3D: isize = STRIDE_X_3D - STRIDE_Y_3D + STRIDE_Z_3D;
+                                const STRIDE_3D: isize = -STRIDE_X_3D - STRIDE_Y_3D + STRIDE_Z_3D;
                                 (fall << 1, fall, i, ny_pz_i, STRIDE_3D)
                             }
-                            NegZ => {
+                            PosZ => {
                                 let fall = (group << 1)
+                                    & !read.some_mask[ny_pz_i]
+                                    & !write.some_mask[ny_pz_i];
+
+                                const STRIDE_3D: isize = STRIDE_X_3D - STRIDE_Y_3D + STRIDE_Z_3D;
+                                (fall >> 1, fall, i, ny_pz_i, STRIDE_3D)
+                            }
+                            NegZ => {
+                                let fall = (group >> 1)
                                     & !read.some_mask[ny_nz_i]
                                     & !write.some_mask[ny_nz_i];
 
                                 const STRIDE_3D: isize = -STRIDE_X_3D - STRIDE_Y_3D - STRIDE_Z_3D;
-                                (fall >> 1, fall, i, ny_nz_i, STRIDE_3D)
+                                (fall << 1, fall, i, ny_nz_i, STRIDE_3D)
                             }
                         };
 
@@ -351,19 +351,19 @@ impl Chunk {
                         let (rm, add, src_i_2d, dst_i_2d, stride_3d) = match dir {
                             PosX => {
                                 let slide = group
-                                    & !(read.some_mask[i] << 1)
-                                    & !(write.some_mask[i] << 1)
-                                    & (read.some_mask[i] >> 1);
-
-                                (!slide, slide >> 1, i, i, STRIDE_X_3D)
-                            }
-                            NegX => {
-                                let slide = group
                                     & !(read.some_mask[i] >> 1)
                                     & !(write.some_mask[i] >> 1)
                                     & (read.some_mask[i] << 1);
 
-                                (!slide, slide << 1, i, i, -STRIDE_X_3D)
+                                (slide, slide << 1, i, i, STRIDE_X_3D)
+                            }
+                            NegX => {
+                                let slide = group
+                                    & !(read.some_mask[i] << 1)
+                                    & !(write.some_mask[i] << 1)
+                                    & (read.some_mask[i] >> 1);
+
+                                (slide, slide >> 1, i, i, -STRIDE_X_3D)
                             }
                             PosZ => {
                                 let slide = group
@@ -371,7 +371,7 @@ impl Chunk {
                                     & !write.some_mask[pz_i]
                                     & read.some_mask[nz_i];
 
-                                (!slide, slide, i, pz_i, STRIDE_Z_3D)
+                                (slide, slide, i, pz_i, STRIDE_Z_3D)
                             }
                             NegZ => {
                                 let slide = group
@@ -379,7 +379,7 @@ impl Chunk {
                                     & !write.some_mask[nz_i]
                                     & read.some_mask[pz_i];
                                     
-                                (!slide, slide, i, nz_i, -STRIDE_Z_3D)
+                                (slide, slide, i, nz_i, -STRIDE_Z_3D)
                             }
                         };
 
@@ -495,20 +495,20 @@ pub fn linearize_2d(p: impl Into<[u32; 2]>) -> usize {
     Shape2d::linearize(p.into()) as usize
 }
 
-#[inline]
-pub fn delinearize_2d(i: usize) -> [u32; 2] {
-    Shape2d::delinearize(i as u32)
-}
+// #[inline]
+// pub fn delinearize_2d(i: usize) -> [u32; 2] {
+//     Shape2d::delinearize(i as u32)
+// }
 
 #[inline]
 pub fn linearize_3d(p: impl Into<[u32; 3]>) -> usize {
     Shape3d::linearize(p.into()) as usize
 }
 
-#[inline]
-pub fn delinearize_3d(i: usize) -> [u32; 3] {
-    Shape3d::delinearize(i as u32)
-}
+// #[inline]
+// pub fn delinearize_3d(i: usize) -> [u32; 3] {
+//     Shape3d::delinearize(i as u32)
+// }
 
 #[inline]
 fn move_liquid(
