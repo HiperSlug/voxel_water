@@ -117,16 +117,16 @@ impl Chunk {
 
             if t_max.x < t_max.y && t_max.x < t_max.z {
                 pos.x += step.x;
-                t_max.x += t_delta.x;
                 distance = t_max.x;
+                t_max.x += t_delta.x;
             } else if t_max.y < t_max.z {
                 pos.y += step.y;
-                t_max.y += t_delta.y;
                 distance = t_max.y;
+                t_max.y += t_delta.y;
             } else {
                 pos.z += step.z;
-                t_max.z += t_delta.z;
                 distance = t_max.z;
+                t_max.z += t_delta.z;
             }
 
             if distance > max {
@@ -164,13 +164,12 @@ impl Chunk {
         // has occupied it gets kicked upwards and if thats not an option it gets kicked \
         // through the offending cell. kicked through is only nececcary to make 1 high \
         // boxes simulate accurately and is definately not nececcary for regular sim.
-        let range = 
+        let range = 1..LEN_U32 - 1;
         // if random() {
         //     itertools::Either::Left(1..LEN_U32 - 1)
         // } else {
         //     itertools::Either::Right((1..LEN_U32 - 1).rev())
         // };
-        1..LEN_U32 - 1;
 
         for z in range.clone() {
             'row: for y in range.clone() {
