@@ -120,15 +120,15 @@ impl Chunk {
             if t_max.x < t_max.y && t_max.x < t_max.z {
                 pos.x += step.x;
                 distance = t_max.x;
-                t_max.x += t_delta.x;
+                t_max.x = distance + t_delta.x;
             } else if t_max.y < t_max.z {
                 pos.y += step.y;
                 distance = t_max.y;
-                t_max.y += t_delta.y;
+                t_max.y = distance + t_delta.y;
             } else {
                 pos.z += step.z;
                 distance = t_max.z;
-                t_max.z += t_delta.z;
+                t_max.z = distance + t_delta.z;
             }
 
             if distance > max {

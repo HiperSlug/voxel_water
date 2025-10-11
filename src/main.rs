@@ -22,8 +22,6 @@ use crate::mesher::MESHER;
 const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
 const MAX_TIMESTEP: Duration = Duration::from_secs(2);
 
-const DESTROY_COOLDOWN: Duration = Duration::from_millis(200);
-
 fn main() {
     let mut app = App::new();
     app.add_plugins((
@@ -124,6 +122,17 @@ fn setup(
         Transform::from_xyz(32.0, 32.0, 32.0),
         Wireframe,
     ));
+    
+    // selected aabb
+    commands.spawn((
+        Mesh3d(
+            meshes.add(Cuboid::from_length(1.0))
+        ),
+        MeshMaterial3d(materials.add(Color::srgba(0.5, 0., 0., 0.5))),
+        Transform::default(),
+        Visibility::Hidden,
+        SelectedMarker,
+    ));
 }
 
 fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
@@ -184,64 +193,80 @@ fn render_chunk(
     })
 }
 
+#[derive(Component)]
+struct SelectedMarker;
+
 fn input(
+    mut transforms: Query<&mut Transform>,
+    selected_q: Single<(Entity, &mut Visibility), With<SelectedMarker>>,
     mb: Res<ButtonInput<MouseButton>>,
     mut chunk: ResMut<Chunk>,
-    transform: Single<&Transform, With<FlyCam>>,
+    player_q: Single<Entity, With<FlyCam>>,
     mut scroll: MessageReader<MouseWheel>,
     mut time_step: ResMut<Time<Fixed>>,
-    time: Res<Time>,
-    mut mmb_cooldown: Local<Timer>,
-    mut rmb_anchor: Local<UVec3>,
+    mut anchor: Local<UVec3>,
 ) {
-    mmb_cooldown.set_duration(DESTROY_COOLDOWN);
-    mmb_cooldown.tick(time.delta());
+    let transform = transforms.get(*player_q).unwrap();
 
     let [last, dst] = chunk.raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
 
-    if mb.pressed(MouseButton::Left)
+    let (selected_entity, mut selected_visibility) = selected_q.into_inner();
+    let mut selected_transform = transforms.get_mut(selected_entity).unwrap();
+
+    if mb.pressed(MouseButton::Middle)
         && let Some(p) = last
     {
         chunk.set(p, Some(Voxel::Liquid));
     }
 
-    if mb.pressed(MouseButton::Middle)
-        && mmb_cooldown.is_finished()
+    if mb.just_pressed(MouseButton::Left)
         && let Some(p) = dst
     {
         chunk.set(p, None);
-        mmb_cooldown.reset();
     }
 
-    if mb.just_pressed(MouseButton::Right)
-        && let Some(p) = last.or(dst)
-    {
-        *rmb_anchor = p;
-    } else if mb.just_released(MouseButton::Right)
-        && let Some(p) = last.or(dst)
-    {
-        let min = p.min(*rmb_anchor);
-        let max = p.max(*rmb_anchor);
-        let max_more = max + UVec3::ONE;
-        for z in [min.z, max.z] {
-            for y in min.y..max_more.y {
-                for x in min.x..max_more.x {
-                    chunk.set([x, y, z], Some(Voxel::Solid));
+    if let Some(p) = last.or(dst) {
+        if mb.just_released(MouseButton::Right) {
+            let min = p.min(*anchor);
+            let max = p.max(*anchor);
+
+            for z in [min.z, max.z] {
+                for y in min.y..max.y + 1 {
+                    for x in min.x..max.x + 1 {
+                        chunk.set([x, y, z], Some(Voxel::Solid));
+                    }
+                }
+            }
+            for z in min.z..max.z + 1 {
+                for x in min.x..max.x + 1 {
+                    chunk.set([x, min.y, z], Some(Voxel::Solid));
+                }
+            }
+            for z in min.z..max.z + 1 {
+                for y in min.y..max.y + 1 { 
+                    for x in [min.x, max.x] {
+                        chunk.set([x, y, z], Some(Voxel::Solid));
+                    }
                 }
             }
         }
-        for z in min.z..max_more.z {
-            for x in min.x..max_more.x {
-                chunk.set([x, min.y, z], Some(Voxel::Solid));
-            }
+
+        if !mb.pressed(MouseButton::Right) {
+            *anchor = p;
         }
-        for z in min.z..max_more.z {
-            for y in min.y..max_more.y { 
-                for x in [min.x, max.x] {
-                    chunk.set([x, y, z], Some(Voxel::Solid));
-                }
-            }
-        }
+
+        let min = p.min(*anchor);
+        let max = p.max(*anchor);
+
+        let scale = (max + UVec3::ONE).as_vec3() - min.as_vec3();
+        let translation = min.as_vec3() + scale / 2.;
+
+        selected_transform.scale = scale;
+        selected_transform.translation = translation;
+
+        *selected_visibility = Visibility::Visible;
+    } else {
+        *selected_visibility = Visibility::Hidden;
     }
 
     for event in scroll.read() {

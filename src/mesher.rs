@@ -349,7 +349,6 @@ impl Mesher {
                                     let w = right_merged;
                                     let h = upward_merged + 1;
 
-                                    // TODO: underflow when upward_merged *somehow* gets carried between columns
                                     let y = y - upward_merged;
 
                                     let pos = uvec3(x, y, z);
