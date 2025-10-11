@@ -330,13 +330,13 @@ impl Mesher {
                                     next_i_3d += STRIDE_X_3D;
 
                                     if (visible >> x) & 1 == 0
-                                        || self.forward_merged[upward_i]
-                                            != self.forward_merged[upward_next_i]
-                                        || voxel_opt == chunk.voxels[next_i_3d]
+                                        || self.upward_merged[upward_i]
+                                            != self.upward_merged[upward_next_i]
+                                        || voxel_opt != chunk.voxels[next_i_3d]
                                     {
                                         break;
                                     }
-                                    self.forward_merged[upward_next_i] = 0;
+                                    self.upward_merged[upward_next_i] = 0;
                                     right_merged += 1;
                                 }
                                 let cleared = x + right_merged;
@@ -349,6 +349,7 @@ impl Mesher {
                                     let w = right_merged;
                                     let h = upward_merged + 1;
 
+                                    // TODO: underflow when upward_merged *somehow* gets carried between columns
                                     let y = y - upward_merged;
 
                                     let pos = uvec3(x, y, z);

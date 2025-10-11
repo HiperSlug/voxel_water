@@ -247,7 +247,7 @@ fn input(
     for event in scroll.read() {
         let new = time_step
             .timestep()
-            .mul_f64(1.1f64.powf(event.y as f64))
+            .mul_f64(1.2f64.powf(event.y as f64))
             .clamp(MIN_TIMESTEP, MAX_TIMESTEP);
 
         time_step.set_timestep(new);
