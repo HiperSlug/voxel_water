@@ -15,12 +15,14 @@ use bevy::input::mouse::MouseWheel;
 use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
 use bevy::prelude::*;
 
-use crate::chunk::{Chunk, LEN_U32, Voxel};
+use crate::chunk::{Chunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::mesher::MESHER;
 
 const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
 const MAX_TIMESTEP: Duration = Duration::from_secs(2);
+
+const DESTROY_COOLDOWN: Duration = Duration::from_millis(200);
 
 fn main() {
     let mut app = App::new();
@@ -188,24 +190,57 @@ fn input(
     transform: Single<&Transform, With<FlyCam>>,
     mut scroll: MessageReader<MouseWheel>,
     mut time_step: ResMut<Time<Fixed>>,
+    time: Res<Time>,
+    mut mmb_cooldown: Local<Timer>,
+    mut rmb_anchor: Local<UVec3>,
 ) {
-    const LEN: f32 = 20.0;
-    let ray = Ray3d::new(transform.translation, transform.forward());
+    mmb_cooldown.set_duration(DESTROY_COOLDOWN);
+    mmb_cooldown.tick(time.delta());
 
-    if mb.pressed(MouseButton::Left) {
-        if let Some(p) = chunk.raycast(ray, LEN) {
-            chunk.set(p, Some(Voxel::Liquid));
-        } else {
-            let p = ray.get_point(LEN).floor().as_uvec3();
-            if p.cmpge(UVec3::ONE).all() && p.cmplt(UVec3::splat(LEN_U32 - 1)).all() {
-                chunk.set(p, Some(Voxel::Liquid));
-            }
-        }
+    let [last, dst] = chunk.raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
+
+    if mb.pressed(MouseButton::Left)
+        && let Some(p) = last
+    {
+        chunk.set(p, Some(Voxel::Liquid));
     }
 
-    if mb.pressed(MouseButton::Middle) {
-        if let Some(p) = chunk.raycast(ray, LEN) {
-            chunk.set(p, None);
+    if mb.pressed(MouseButton::Middle)
+        && mmb_cooldown.is_finished()
+        && let Some(p) = dst
+    {
+        chunk.set(p, None);
+        mmb_cooldown.reset();
+    }
+
+    if mb.just_pressed(MouseButton::Right)
+        && let Some(p) = last.or(dst)
+    {
+        *rmb_anchor = p;
+    } else if mb.just_released(MouseButton::Right)
+        && let Some(p) = last.or(dst)
+    {
+        let min = p.min(*rmb_anchor);
+        let max = p.max(*rmb_anchor);
+        let max_more = max + UVec3::ONE;
+        for z in [min.z, max.z] {
+            for y in min.y..max_more.y {
+                for x in min.x..max_more.x {
+                    chunk.set([x, y, z], Some(Voxel::Solid));
+                }
+            }
+        }
+        for z in min.z..max_more.z {
+            for x in min.x..max_more.x {
+                chunk.set([x, min.y, z], Some(Voxel::Solid));
+            }
+        }
+        for z in min.z..max_more.z {
+            for y in min.y..max_more.y { 
+                for x in [min.x, max.x] {
+                    chunk.set([x, y, z], Some(Voxel::Solid));
+                }
+            }
         }
     }
 

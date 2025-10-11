@@ -87,7 +87,7 @@ impl Chunk {
         }
     }
 
-    pub fn raycast(&self, ray: Ray3d, max: f32) -> Option<UVec3> {
+    pub fn raycast(&self, ray: Ray3d, max: f32) -> [Option<UVec3>; 2] {
         let masks = self.masks.front();
 
         let origin = ray.origin.to_vec3a();
@@ -109,9 +109,11 @@ impl Chunk {
                 pos.cmpge(IVec3::ONE).all() && pos.cmplt(IVec3::splat(LEN as i32 - 1)).all();
             if in_unpad_bounds {
                 let pos = pos.as_uvec3();
+
                 if masks.is_some(pos) {
-                    return Some(pos);
+                    return [last, Some(pos)];
                 }
+
                 last = Some(pos);
             }
 
@@ -130,7 +132,7 @@ impl Chunk {
             }
 
             if distance > max {
-                return last;
+                return [last, None];
             }
         }
     }
@@ -156,6 +158,8 @@ impl Chunk {
         }
 
         let [read, write] = self.masks.swap_mut();
+        *write = read.clone();
+
         let voxels = &mut self.voxels;
 
         // unfortunately the ordering priority is very noticable
@@ -164,15 +168,8 @@ impl Chunk {
         // has occupied it gets kicked upwards and if thats not an option it gets kicked \
         // through the offending cell. kicked through is only nececcary to make 1 high \
         // boxes simulate accurately and is definately not nececcary for regular sim.
-        let range = 1..LEN_U32 - 1;
-        // if random() {
-        //     itertools::Either::Left(1..LEN_U32 - 1)
-        // } else {
-        //     itertools::Either::Right((1..LEN_U32 - 1).rev())
-        // };
-
-        for z in range.clone() {
-            'row: for y in range.clone() {
+        for z in 1..LEN_U32 - 1 {
+            'row: for y in 1..LEN_U32 - 1 {
                 let i = linearize_2d([y, z]);
                 let yz_i_3d = linearize_3d([0, y, z]);
 
@@ -413,8 +410,6 @@ impl Chunk {
                 }
             }
         }
-
-        read.clone_from(write);
     }
 }
 
