@@ -12,7 +12,7 @@ use std::time::Duration;
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::core_pipeline::Skybox;
 use bevy::input::mouse::MouseWheel;
-use bevy::pbr::wireframe::{Wireframe, WireframePlugin};
+use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
 use crate::chunk::{Chunk, Voxel};
@@ -24,14 +24,9 @@ const MAX_TIMESTEP: Duration = Duration::from_secs(2);
 
 fn main() {
     let mut app = App::new();
-    app.add_plugins((
-        DefaultPlugins,
-        NoCameraPlayerPlugin,
-        WireframePlugin::default(),
-        Game,
-    ))
-    .add_systems(Startup, setup)
-    .run();
+    app.add_plugins((DefaultPlugins, NoCameraPlayerPlugin, Game))
+        .add_systems(Startup, setup)
+        .run();
 }
 
 struct Game;
@@ -110,25 +105,14 @@ fn setup(
 
     // chunk aabb
     commands.spawn((
-        Mesh3d(
-            meshes.add(
-                Cuboid::from_length(62.0)
-                    .mesh()
-                    .build()
-                    .with_inverted_winding()
-                    .unwrap(),
-            ),
-        ),
-        MeshMaterial3d(materials.add(Color::srgba(1.0, 1.0, 1.0, 0.0))),
+        Mesh3d(meshes.add(cuboid_wireframe_mesh(Vec3::splat(62.0)))),
+        MeshMaterial3d(materials.add(Color::srgba(1.0, 1.0, 1.0, 1.0))),
         Transform::from_xyz(32.0, 32.0, 32.0),
-        Wireframe,
     ));
-    
+
     // selected aabb
     commands.spawn((
-        Mesh3d(
-            meshes.add(Cuboid::from_length(1.0))
-        ),
+        Mesh3d(meshes.add(Cuboid::from_length(1.0))),
         MeshMaterial3d(materials.add(Color::srgba(0.5, 0., 0., 0.5))),
         Transform::default(),
         Visibility::Hidden,
@@ -147,7 +131,7 @@ fn setup(
             right: px,
             position_type: PositionType::Absolute,
             ..default()
-        }
+        },
     ));
 
     commands.spawn((
@@ -157,7 +141,7 @@ fn setup(
             left: px,
             position_type: PositionType::Absolute,
             ..default()
-        }
+        },
     ));
 }
 
@@ -269,7 +253,7 @@ fn input(
                 }
             }
             for z in min.z + 1..=max.z - 1 {
-                for y in min.y + 1..=max.y { 
+                for y in min.y + 1..=max.y {
                     for x in [min.x, max.x] {
                         chunk.set([x, y, z], Some(Voxel::Solid));
                     }
@@ -303,4 +287,52 @@ fn input(
 
         time_step.set_timestep(new);
     }
+}
+
+// web shit
+// AI
+pub fn cuboid_wireframe_mesh(size: Vec3) -> Mesh {
+    // compute 8 corners of an axis-aligned cuboid centered at origin
+    let hx = size.x * 0.5;
+    let hy = size.y * 0.5;
+    let hz = size.z * 0.5;
+    let corners = [
+        Vec3::new(-hx, -hy, -hz),
+        Vec3::new(hx, -hy, -hz),
+        Vec3::new(hx, hy, -hz),
+        Vec3::new(-hx, hy, -hz),
+        Vec3::new(-hx, -hy, hz),
+        Vec3::new(hx, -hy, hz),
+        Vec3::new(hx, hy, hz),
+        Vec3::new(-hx, hy, hz),
+    ];
+    // cuboid edges as pairs of corner indices
+    let edges = [
+        (0usize, 1usize),
+        (1, 2),
+        (2, 3),
+        (3, 0), // bottom/top face perimeter (z = -hz)
+        (4, 5),
+        (5, 6),
+        (6, 7),
+        (7, 4), // other face (z = +hz)
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7), // vertical connectors
+    ];
+
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(8);
+    for c in corners.iter() {
+        positions.push([c.x, c.y, c.z]);
+    }
+    let mut indices: Vec<u32> = Vec::with_capacity(edges.len() * 2);
+    for (a, b) in edges.iter() {
+        indices.push(*a as u32);
+        indices.push(*b as u32);
+    }
+    let mut mesh = Mesh::new(PrimitiveTopology::LineList, default());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
 }

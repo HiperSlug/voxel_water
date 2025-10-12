@@ -220,6 +220,19 @@ impl Plugin for NoCameraPlayerPlugin {
             .add_systems(Startup, initial_grab_on_flycam_spawn)
             .add_systems(Update, player_move)
             .add_systems(Update, player_look)
-            .add_systems(Update, cursor_grab);
+            .add_systems(Update, cursor_grab)
+            .add_systems(Update, request_pointer_lock_on_click);
     }
+}
+
+// AI
+fn request_pointer_lock_on_click(
+	mut window: Single<&mut CursorOptions, With<PrimaryWindow>>,
+	mouse_button_input: Res<ButtonInput<MouseButton>>,
+) {
+	if mouse_button_input.just_pressed(MouseButton::Left) {
+		// Only works if this is the direct response to user input
+		window.grab_mode = CursorGrabMode::Locked;
+		window.visible = false;
+	}
 }
