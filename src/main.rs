@@ -39,6 +39,7 @@ struct Game;
 impl Plugin for Game {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "skybox.ktx2");
+        embedded_asset!(app, "wand.png");
 
         app.insert_resource(Time::<Fixed>::from_hz(10.0))
             .init_resource::<Chunk>();
@@ -132,6 +133,31 @@ fn setup(
         Transform::default(),
         Visibility::Hidden,
         SelectedMarker,
+    ));
+
+    // wands
+    let image_node = ImageNode::new(load_embedded_asset!(&*asset_server, "wand.png"));
+
+    let px = Val::Px(-150.);
+
+    commands.spawn((
+        image_node.clone(),
+        Node {
+            bottom: px,
+            right: px,
+            position_type: PositionType::Absolute,
+            ..default()
+        }
+    ));
+
+    commands.spawn((
+        image_node.with_flip_x(),
+        Node {
+            bottom: px,
+            left: px,
+            position_type: PositionType::Absolute,
+            ..default()
+        }
     ));
 }
 
@@ -231,19 +257,19 @@ fn input(
             let max = p.max(*anchor);
 
             for z in [min.z, max.z] {
-                for y in min.y..max.y + 1 {
-                    for x in min.x..max.x + 1 {
+                for y in min.y..=max.y {
+                    for x in min.x..=max.x {
                         chunk.set([x, y, z], Some(Voxel::Solid));
                     }
                 }
             }
-            for z in min.z..max.z + 1 {
-                for x in min.x..max.x + 1 {
+            for z in min.z + 1..=max.z - 1 {
+                for x in min.x..=max.x {
                     chunk.set([x, min.y, z], Some(Voxel::Solid));
                 }
             }
-            for z in min.z..max.z + 1 {
-                for y in min.y..max.y + 1 { 
+            for z in min.z + 1..=max.z - 1 {
+                for y in min.y + 1..=max.y { 
                     for x in [min.x, max.x] {
                         chunk.set([x, y, z], Some(Voxel::Solid));
                     }

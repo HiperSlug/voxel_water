@@ -528,6 +528,10 @@ fn move_liquid(
     yz_i_3d: usize,
     stride_3d: isize,
 ) {
+    if rm == 0 {
+        return;
+    }
+
     // masks
     *liquid &= !rm;
     write.some_mask[src_i_2d] &= !rm;
