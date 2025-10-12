@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::core_pipeline::Skybox;
-use bevy::input::mouse::MouseWheel;
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
@@ -280,9 +280,14 @@ fn input(
     }
 
     for event in scroll.read() {
+        #[cfg(not(target_arch = "wasm32"))]
+        let scroll = match event.unit { MouseScrollUnit::Line => event.y / 16., MouseScrollUnit::Pixel => event.y, } * 8.;
+        #[cfg(target_arch = "wasm32")]
+        let scroll = match event.unit { MouseScrollUnit::Line => event.y / 16., MouseScrollUnit::Pixel => event.y, } / 100.;
+
         let new = time_step
             .timestep()
-            .mul_f64(1.2f64.powf(event.y as f64))
+            .mul_f64(1.2f64.powf(scroll as f64))
             .clamp(MIN_TIMESTEP, MAX_TIMESTEP);
 
         time_step.set_timestep(new);
