@@ -4544,10 +4544,9 @@ name = "voxel_water"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bytemuck",
  "enum-map",
- "itertools 0.14.0",
  "ndshape",
- "nonmax",
  "rand",
 ]
 

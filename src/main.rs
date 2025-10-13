@@ -1,6 +1,7 @@
 mod chunk;
 // pub so no dead code
 pub mod flycam;
+mod instancing;
 mod mesher;
 
 use std::f32::consts::PI;
@@ -140,7 +141,7 @@ fn render_chunk(
     >,
 ) {
     MESHER.with_borrow_mut(|mesher| {
-        let quads = mesher.mesh(&chunk);
+        let quads = mesher.mesh(&chunk, IVec3::ZERO);
 
         let mut new_iter = quads.iter();
         let mut old_iter = old_quads.iter_mut();
@@ -150,9 +151,10 @@ fn render_chunk(
         {
             *transform = quad.rectangle_transform();
             *visibility = Visibility::Visible;
-            material.0 = match quad.voxel {
-                Voxel::Liquid => handles.liquid.clone(),
-                Voxel::Solid => handles.solid.clone(),
+            material.0 = match quad.texture() {
+                0 => handles.liquid.clone(),
+                1 => handles.solid.clone(),
+                _ => unreachable!(),
             };
         }
 
@@ -164,9 +166,10 @@ fn render_chunk(
             commands.spawn((
                 quad.rectangle_transform(),
                 Mesh3d(handles.quad.clone()),
-                MeshMaterial3d(match quad.voxel {
-                    Voxel::Liquid => handles.liquid.clone(),
-                    Voxel::Solid => handles.solid.clone(),
+                MeshMaterial3d(match quad.texture() {
+                    0 => handles.liquid.clone(),
+                    1 => handles.solid.clone(),
+                    _ => unreachable!(),
                 }),
                 QuadMarker,
             ));

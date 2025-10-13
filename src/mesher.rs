@@ -5,8 +5,7 @@ use enum_map::{Enum, EnumMap, enum_map};
 use std::cell::RefCell;
 
 use crate::chunk::{
-    AREA, Chunk, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D, STRIDE_Z_2D,
-    STRIDE_Z_3D, linearize_2d, linearize_3d,
+    linearize_2d, linearize_3d, Chunk, Voxel, AREA, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D, STRIDE_Z_2D, STRIDE_Z_3D
 };
 
 pub use quad::Quad;
@@ -18,14 +17,15 @@ const FORWARD_STRIDE_Y: usize = STRIDE_Y_3D;
 const FACES: [Face; 6] = [PosX, PosY, PosZ, NegX, NegY, NegZ];
 
 use Face::*;
+#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Enum)]
 pub enum Face {
-    PosX,
-    PosY,
-    PosZ,
-    NegX,
-    NegY,
-    NegZ,
+    PosX = 0,
+    PosY = 1,
+    PosZ = 2,
+    NegX = 3,
+    NegY = 4,
+    NegZ = 5,
 }
 
 thread_local! {
@@ -97,7 +97,7 @@ impl Mesher {
         }
     }
 
-    fn face_merging(&mut self, chunk: &Chunk) {
+    fn face_merging(&mut self, chunk: &Chunk, origin: IVec3) {
         for face in FACES {
             let visible_mask = &mut self.visible_masks[face];
             for z in 1..LEN_U32 - 1 {
@@ -156,14 +156,15 @@ impl Mesher {
                                     let y = y - upward_merged;
                                     let z = z - forward_merged;
 
-                                    let pos = uvec3(x, y, z);
-                                    let size = uvec2(w, h);
-                                    Quad {
-                                        pos,
-                                        size,
-                                        face,
-                                        voxel,
-                                    }
+                                    let pos = uvec3(x, y, z).as_ivec3() + origin;
+
+                                    // TODO: change placeholder
+                                    let t = match voxel {
+                                        Voxel::Liquid => 0,
+                                        Voxel::Solid => 1,
+                                    };
+
+                                    Quad::new(pos, w, h, face, t)
                                 });
 
                                 self.forward_merged[forward_i] = 0;
@@ -221,15 +222,14 @@ impl Mesher {
 
                                     let z = z - forward_merged;
 
-                                    let pos = uvec3(x, y, z);
-                                    let size = uvec2(w, h);
+                                    let pos = uvec3(x, y, z).as_ivec3() + origin;
 
-                                    Quad {
-                                        pos,
-                                        size,
-                                        face,
-                                        voxel,
-                                    }
+                                    let t = match voxel {
+                                        Voxel::Liquid => 0,
+                                        Voxel::Solid => 1,
+                                    };
+
+                                    Quad::new(pos, w, h, face, t)
                                 });
 
                                 self.forward_merged[forward_i] = 0
@@ -286,15 +286,14 @@ impl Mesher {
 
                                     let y = y - upward_merged;
 
-                                    let pos = uvec3(x, y, z);
-                                    let size = uvec2(w, h);
+                                    let pos = uvec3(x, y, z).as_ivec3() + origin;
 
-                                    Quad {
-                                        pos,
-                                        size,
-                                        face,
-                                        voxel,
-                                    }
+                                    let t = match voxel {
+                                        Voxel::Liquid => 0,
+                                        Voxel::Solid => 1,
+                                    };
+                                    
+                                    Quad::new(pos, w, h, face, t)
                                 });
 
                                 self.upward_merged[upward_i] = 0;
@@ -306,10 +305,11 @@ impl Mesher {
         }
     }
 
-    pub fn mesh(&mut self, chunk: &Chunk) -> &[Quad] {
+    pub fn mesh(&mut self, chunk: &Chunk, chunk_pos: IVec3) -> &[Quad] {
+        let origin = chunk_pos * LEN as i32;
         self.clear();
         self.build_visible_masks(chunk);
-        self.face_merging(chunk);
+        self.face_merging(chunk, origin);
         &self.quads
     }
 }
