@@ -1,7 +1,4 @@
-// TODO: non-random spreading. Instead base it on neighbor state
-
 mod chunk;
-mod double_buffered;
 // pub so no dead code
 pub mod flycam;
 mod mesher;
@@ -34,7 +31,6 @@ struct Game;
 impl Plugin for Game {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "skybox.ktx2");
-        embedded_asset!(app, "wand.png");
 
         app.insert_resource(Time::<Fixed>::from_hz(10.0))
             .init_resource::<Chunk>();
@@ -74,7 +70,7 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: ResMut<AssetServer>,
 ) {
-    chunk.set_padding(Some(Voxel::Solid));
+    chunk.fill_padding(Some(Voxel::Solid));
 
     // light
     commands.spawn((
@@ -117,31 +113,6 @@ fn setup(
         Transform::default(),
         Visibility::Hidden,
         SelectedMarker,
-    ));
-
-    // wands
-    let image_node = ImageNode::new(load_embedded_asset!(&*asset_server, "wand.png"));
-
-    let px = Val::Px(-150.);
-
-    commands.spawn((
-        image_node.clone(),
-        Node {
-            bottom: px,
-            right: px,
-            position_type: PositionType::Absolute,
-            ..default()
-        },
-    ));
-
-    commands.spawn((
-        image_node.with_flip_x(),
-        Node {
-            bottom: px,
-            left: px,
-            position_type: PositionType::Absolute,
-            ..default()
-        },
     ));
 }
 
@@ -281,9 +252,15 @@ fn input(
 
     for event in scroll.read() {
         #[cfg(not(target_arch = "wasm32"))]
-        let scroll = match event.unit { MouseScrollUnit::Line => event.y / 16., MouseScrollUnit::Pixel => event.y, } * 8.;
+        let scroll = match event.unit {
+            MouseScrollUnit::Line => event.y / 16.,
+            MouseScrollUnit::Pixel => event.y,
+        } * 8.;
         #[cfg(target_arch = "wasm32")]
-        let scroll = match event.unit { MouseScrollUnit::Line => event.y / 16., MouseScrollUnit::Pixel => event.y, } / 100.;
+        let scroll = match event.unit {
+            MouseScrollUnit::Line => event.y / 16.,
+            MouseScrollUnit::Pixel => event.y,
+        } / 100.;
 
         let new = time_step
             .timestep()
@@ -294,48 +271,38 @@ fn input(
     }
 }
 
-// web shit
 // AI
 pub fn cuboid_wireframe_mesh(size: Vec3) -> Mesh {
-    // compute 8 corners of an axis-aligned cuboid centered at origin
-    let hx = size.x * 0.5;
-    let hy = size.y * 0.5;
-    let hz = size.z * 0.5;
+    let h = size / 2.;
+
     let corners = [
-        Vec3::new(-hx, -hy, -hz),
-        Vec3::new(hx, -hy, -hz),
-        Vec3::new(hx, hy, -hz),
-        Vec3::new(-hx, hy, -hz),
-        Vec3::new(-hx, -hy, hz),
-        Vec3::new(hx, -hy, hz),
-        Vec3::new(hx, hy, hz),
-        Vec3::new(-hx, hy, hz),
+        vec3(-h.x, -h.y, -h.z),
+        vec3(h.x, -h.y, -h.z),
+        vec3(h.x, h.y, -h.z),
+        vec3(-h.x, h.y, -h.z),
+        vec3(-h.x, -h.y, h.z),
+        vec3(h.x, -h.y, h.z),
+        vec3(h.x, h.y, h.z),
+        vec3(-h.x, h.y, h.z),
     ];
-    // cuboid edges as pairs of corner indices
     let edges = [
-        (0usize, 1usize),
-        (1, 2),
-        (2, 3),
-        (3, 0), // bottom/top face perimeter (z = -hz)
-        (4, 5),
-        (5, 6),
-        (6, 7),
-        (7, 4), // other face (z = +hz)
-        (0, 4),
-        (1, 5),
-        (2, 6),
-        (3, 7), // vertical connectors
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 0],
+        [4, 5],
+        [5, 6],
+        [6, 7],
+        [7, 4],
+        [0, 4],
+        [1, 5],
+        [2, 6],
+        [3, 7],
     ];
 
-    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(8);
-    for c in corners.iter() {
-        positions.push([c.x, c.y, c.z]);
-    }
-    let mut indices: Vec<u32> = Vec::with_capacity(edges.len() * 2);
-    for (a, b) in edges.iter() {
-        indices.push(*a as u32);
-        indices.push(*b as u32);
-    }
+    let positions = corners.iter().map(|c| c.to_array()).collect::<Vec<_>>();
+    let indices = edges.into_iter().flatten().collect::<Vec<_>>();
+
     let mut mesh = Mesh::new(PrimitiveTopology::LineList, default());
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_indices(Indices::U32(indices));

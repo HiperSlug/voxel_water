@@ -22,6 +22,7 @@ impl<T> DoubleBuffered<T> {
         }
     }
 
+    /// `[front, back]`
     pub fn swap_mut(&mut self) -> [&mut T; 2] {
         let swapped = self.swapped;
         self.swapped = !swapped;

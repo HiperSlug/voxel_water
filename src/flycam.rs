@@ -227,12 +227,12 @@ impl Plugin for NoCameraPlayerPlugin {
 
 // AI
 fn request_pointer_lock_on_click(
-	mut window: Single<&mut CursorOptions, With<PrimaryWindow>>,
-	mouse_button_input: Res<ButtonInput<MouseButton>>,
+    mut window: Single<&mut CursorOptions, With<PrimaryWindow>>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
 ) {
-	if mouse_button_input.just_pressed(MouseButton::Left) {
-		// Only works if this is the direct response to user input
-		window.grab_mode = CursorGrabMode::Locked;
-		window.visible = false;
-	}
+    if mouse_button_input.just_pressed(MouseButton::Left) {
+        // Only works if this is the direct response to user input
+        window.grab_mode = CursorGrabMode::Locked;
+        window.visible = false;
+    }
 }

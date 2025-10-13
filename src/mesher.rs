@@ -1,17 +1,23 @@
+mod quad;
+
 use bevy::prelude::*;
 use enum_map::{Enum, EnumMap, enum_map};
-use std::{
-    cell::RefCell,
-    f32::consts::{FRAC_PI_2, PI},
-};
+use std::cell::RefCell;
 
 use crate::chunk::{
-    AREA, Chunk, LEN, LEN_U32, PAD_MASK, STRIDE_0, STRIDE_1, STRIDE_2, Voxel, linearize_2d,
-    linearize_3d,
+    AREA, Chunk, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D, STRIDE_Z_2D,
+    STRIDE_Z_3D, linearize_2d, linearize_3d,
 };
 
-use Face::*;
+pub use quad::Quad;
 
+const UPWARD_STRIDE_X: usize = STRIDE_X_3D;
+const FORWARD_STRIDE_X: usize = STRIDE_X_3D;
+const FORWARD_STRIDE_Y: usize = STRIDE_Y_3D;
+
+const FACES: [Face; 6] = [PosX, PosY, PosZ, NegX, NegY, NegZ];
+
+use Face::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Enum)]
 pub enum Face {
     PosX,
@@ -20,60 +26,6 @@ pub enum Face {
     NegX,
     NegY,
     NegZ,
-}
-
-impl Face {
-    const ALL: [Self; 6] = [PosX, PosY, PosZ, NegX, NegY, NegZ];
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Quad {
-    pub pos: UVec3,
-    pub size: UVec2,
-    pub face: Face,
-    // TODO: runtime texture indexing
-    pub voxel: Voxel,
-}
-
-impl Quad {
-    pub fn rectangle_transform(&self) -> Transform {
-        let pos = self.pos.as_vec3();
-        let scale = self.size.as_vec2().extend(1.0);
-        let half_size = self.size.as_vec2() / 2.0;
-
-        match self.face {
-            PosX => Transform {
-                translation: pos + vec3(1.0, half_size.y, half_size.x),
-                rotation: Quat::from_rotation_y(FRAC_PI_2),
-                scale,
-            },
-            NegX => Transform {
-                translation: pos + vec3(0.0, half_size.y, half_size.x),
-                rotation: Quat::from_rotation_y(-FRAC_PI_2),
-                scale,
-            },
-            PosY => Transform {
-                translation: pos + vec3(half_size.x, 1.0, half_size.y),
-                rotation: Quat::from_rotation_x(-FRAC_PI_2),
-                scale,
-            },
-            NegY => Transform {
-                translation: pos + vec3(half_size.x, 0.0, half_size.y),
-                rotation: Quat::from_rotation_x(FRAC_PI_2),
-                scale,
-            },
-            PosZ => Transform {
-                translation: pos + vec3(half_size.x, half_size.y, 1.0),
-                rotation: Quat::default(),
-                scale,
-            },
-            NegZ => Transform {
-                translation: pos + vec3(half_size.x, half_size.y, 0.0),
-                rotation: Quat::from_rotation_y(-PI),
-                scale,
-            },
-        }
-    }
 }
 
 thread_local! {
@@ -103,25 +55,20 @@ impl Default for Mesher {
 }
 
 impl Mesher {
+    // TODO: determine nececcity, after transparency
     fn clear(&mut self) {
         self.quads.clear();
-        // TODO: also may not need to be zeroed
         self.upward_merged.fill(0);
-        // TODO: ditto
         self.forward_merged.fill(0);
-        // TODO: ditto
         for (_, arr) in &mut *self.visible_masks {
             arr.fill(0)
         }
     }
 
     fn build_visible_masks(&mut self, chunk: &Chunk) {
-        const STRIDE_Y: usize = STRIDE_0;
-        const STRIDE_Z: usize = STRIDE_1;
-
         let some_mask = &chunk.masks.front().some_mask;
 
-        for face in Face::ALL {
+        for face in FACES {
             let visible_mask = &mut self.visible_masks[face];
 
             for z in 1..LEN_U32 - 1 {
@@ -138,10 +85,10 @@ impl Mesher {
                     let adj_some = match face {
                         PosX => some >> 1,
                         NegX => some << 1,
-                        PosY => some_mask[i + STRIDE_Y],
-                        NegY => some_mask[i - STRIDE_Y],
-                        PosZ => some_mask[i + STRIDE_Z],
-                        NegZ => some_mask[i - STRIDE_Z],
+                        PosY => some_mask[i + STRIDE_Y_2D],
+                        NegY => some_mask[i - STRIDE_Y_2D],
+                        PosZ => some_mask[i + STRIDE_Z_2D],
+                        NegZ => some_mask[i - STRIDE_Z_2D],
                     };
 
                     visible_mask[i] = unpad_some & !adj_some;
@@ -151,19 +98,7 @@ impl Mesher {
     }
 
     fn face_merging(&mut self, chunk: &Chunk) {
-        const STRIDE_X_3D: usize = STRIDE_0;
-        const STRIDE_Y_3D: usize = STRIDE_1;
-        const STRIDE_Z_3D: usize = STRIDE_2;
-
-        const STRIDE_Y_2D: usize = STRIDE_0;
-        const STRIDE_Z_2D: usize = STRIDE_1;
-
-        const FORWARD_STRIDE_X: usize = STRIDE_0;
-        const FORWARD_STRIDE_Y: usize = STRIDE_1;
-
-        const UPWARD_STRIDE_X: usize = STRIDE_0;
-
-        for face in Face::ALL {
+        for face in FACES {
             let visible_mask = &mut self.visible_masks[face];
             for z in 1..LEN_U32 - 1 {
                 for y in 1..LEN_U32 - 1 {
