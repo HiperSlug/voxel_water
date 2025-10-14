@@ -1,8 +1,6 @@
 mod chunk;
-// pub so no dead code
-pub mod flycam;
-mod instancing;
-mod mesher;
+mod flycam;
+mod render;
 
 use std::f32::consts::PI;
 use std::time::Duration;
@@ -16,8 +14,8 @@ use bevy::render::view::NoIndirectDrawing;
 
 use crate::chunk::{Chunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
-use crate::instancing::{ChunkQuads, QuadInstancingPlugin};
-use crate::mesher::MESHER;
+use crate::render::mesher::MESHER;
+use crate::render::pipeline::{ChunkQuads, QuadInstancingPlugin};
 
 const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
 const MAX_TIMESTEP: Duration = Duration::from_secs(2);

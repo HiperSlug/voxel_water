@@ -1,4 +1,4 @@
-mod double_buffered;
+pub mod double_buffered;
 mod liquid_tick;
 mod masks;
 

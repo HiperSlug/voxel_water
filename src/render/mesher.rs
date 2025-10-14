@@ -1,33 +1,17 @@
-mod quad;
-
 use bevy::prelude::*;
-use enum_map::{Enum, EnumMap, enum_map};
+use enum_map::{EnumMap, enum_map};
 use std::cell::RefCell;
+
+use super::*;
 
 use crate::chunk::{
     AREA, Chunk, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D, STRIDE_Z_2D,
     STRIDE_Z_3D, Voxel, linearize_2d, linearize_3d,
 };
 
-pub use quad::Quad;
-
 const UPWARD_STRIDE_X: usize = STRIDE_X_3D;
 const FORWARD_STRIDE_X: usize = STRIDE_X_3D;
 const FORWARD_STRIDE_Y: usize = STRIDE_Y_3D;
-
-const FACES: [Face; 6] = [PosX, PosY, PosZ, NegX, NegY, NegZ];
-
-use Face::*;
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Enum)]
-pub enum Face {
-    PosX = 0,
-    PosY = 1,
-    PosZ = 2,
-    NegX = 3,
-    NegY = 4,
-    NegZ = 5,
-}
 
 thread_local! {
     pub static MESHER: RefCell<Mesher> = default();
@@ -69,7 +53,7 @@ impl Mesher {
     fn build_visible_masks(&mut self, chunk: &Chunk) {
         let some_mask = &chunk.masks.front().some_mask;
 
-        for face in FACES {
+        for face in Face::ALL {
             let visible_mask = &mut self.visible_masks[face];
 
             for z in 1..LEN_U32 - 1 {
@@ -99,7 +83,7 @@ impl Mesher {
     }
 
     fn face_merging(&mut self, chunk: &Chunk, origin: IVec3) {
-        for face in FACES {
+        for face in Face::ALL {
             let visible_mask = &mut self.visible_masks[face];
             for z in 1..LEN_U32 - 1 {
                 for y in 1..LEN_U32 - 1 {

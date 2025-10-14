@@ -1,7 +1,11 @@
+pub mod mesher;
+pub mod pipeline;
+
 use bevy::prelude::*;
 use bytemuck::{Pod, Zeroable};
+use enum_map::Enum;
 
-use super::Face;
+pub use Face::*;
 
 const MAX6: u32 = (1 << 6) - 1;
 const MAX16: u32 = u16::MAX as u32;
@@ -20,6 +24,7 @@ pub struct Quad {
 }
 
 impl Quad {
+    #[inline]
     pub fn new(pos: IVec3, w: u32, h: u32, f: Face, t: u32) -> Self {
         debug_assert!(w <= MAX6, "width: {w} > {MAX6}");
         debug_assert!(h <= MAX6, "height: {h} > {MAX6}");
@@ -35,4 +40,19 @@ impl Quad {
                 | (t << TEXTURE_SHIFT),
         }
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Enum)]
+pub enum Face {
+    PosX = 0,
+    PosY = 1,
+    PosZ = 2,
+    NegX = 3,
+    NegY = 4,
+    NegZ = 5,
+}
+
+impl Face {
+    const ALL: [Self; 6] = [PosX, PosY, PosZ, NegX, NegY, NegZ];
 }

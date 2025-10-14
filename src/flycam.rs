@@ -1,4 +1,6 @@
-/// https://github.com/sburris0/bevy_flycam modified for 1.17.0-rc.2
+//! https://github.com/sburris0/bevy_flycam modified for 1.17.0-rc.2
+#![allow(unused)]
+
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};

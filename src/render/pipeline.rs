@@ -1,9 +1,9 @@
 use bevy::{
     core_pipeline::core_3d::Transparent3d,
     ecs::system::{
-            SystemParamItem,
-            lifetimeless::{Read, SRes},
-        },
+        SystemParamItem,
+        lifetimeless::{Read, SRes},
+    },
     mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat},
     pbr::{
         MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
@@ -30,7 +30,7 @@ use bevy::{
     },
 };
 
-use crate::mesher::Quad;
+use super::Quad;
 
 const SHADER_ASSET_PATH: &str = "quad.wgsl";
 
