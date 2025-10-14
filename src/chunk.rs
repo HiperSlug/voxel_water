@@ -29,7 +29,6 @@ pub enum Voxel {
     Solid,
 }
 
-#[derive(Component)]
 pub struct Chunk {
     pub voxels: Voxels,
     pub masks: DoubleBuffered<Masks>,
