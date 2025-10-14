@@ -151,36 +151,32 @@ impl Chunk {
                                     & !read.some_mask[ny_nz_i]
                                     & !write.some_mask[ny_nz_i];
 
-                                const I_STRIDE_3D: isize =
-                                    I_STRIDE_X_3D - I_STRIDE_Y_3D - I_STRIDE_Z_3D;
-                                (fall >> 1, fall, i, ny_nz_i, I_STRIDE_3D)
+                                const S: isize = I_STRIDE_X_3D - I_STRIDE_Y_3D - I_STRIDE_Z_3D;
+                                (fall >> 1, fall, i, ny_nz_i, S)
                             }
                             NegX => {
                                 let fall = (group >> 1)
                                     & !read.some_mask[ny_pz_i]
                                     & !write.some_mask[ny_pz_i];
 
-                                const I_STRIDE_3D: isize =
-                                    -I_STRIDE_X_3D - I_STRIDE_Y_3D + I_STRIDE_Z_3D;
-                                (fall << 1, fall, i, ny_pz_i, I_STRIDE_3D)
+                                const S: isize = -I_STRIDE_X_3D - I_STRIDE_Y_3D + I_STRIDE_Z_3D;
+                                (fall << 1, fall, i, ny_pz_i, S)
                             }
                             PosZ => {
                                 let fall = (group << 1)
                                     & !read.some_mask[ny_pz_i]
                                     & !write.some_mask[ny_pz_i];
 
-                                const I_STRIDE_3D: isize =
-                                    I_STRIDE_X_3D - I_STRIDE_Y_3D + I_STRIDE_Z_3D;
-                                (fall >> 1, fall, i, ny_pz_i, I_STRIDE_3D)
+                                const S: isize = I_STRIDE_X_3D - I_STRIDE_Y_3D + I_STRIDE_Z_3D;
+                                (fall >> 1, fall, i, ny_pz_i, S)
                             }
                             NegZ => {
                                 let fall = (group >> 1)
                                     & !read.some_mask[ny_nz_i]
                                     & !write.some_mask[ny_nz_i];
 
-                                const I_STRIDE_3D: isize =
-                                    -I_STRIDE_X_3D - I_STRIDE_Y_3D - I_STRIDE_Z_3D;
-                                (fall << 1, fall, i, ny_nz_i, I_STRIDE_3D)
+                                const S: isize = -I_STRIDE_X_3D - I_STRIDE_Y_3D - I_STRIDE_Z_3D;
+                                (fall << 1, fall, i, ny_nz_i, S)
                             }
                         };
 

@@ -29,7 +29,7 @@ pub enum Voxel {
     Solid,
 }
 
-#[derive(Resource)]
+#[derive(Component)]
 pub struct Chunk {
     pub voxels: Voxels,
     pub masks: DoubleBuffered<Masks>,
@@ -145,7 +145,7 @@ pub fn linearize_3d(p: impl Into<[u32; 3]>) -> usize {
     Shape3d::linearize(p.into()) as usize
 }
 
-#[inline]
-pub fn delinearize_3d(i: usize) -> [u32; 3] {
-    Shape3d::delinearize(i as u32)
-}
+// #[inline]
+// pub fn delinearize_3d(i: usize) -> [u32; 3] {
+//     Shape3d::delinearize(i as u32)
+// }

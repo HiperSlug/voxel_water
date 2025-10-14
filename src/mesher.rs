@@ -5,7 +5,8 @@ use enum_map::{Enum, EnumMap, enum_map};
 use std::cell::RefCell;
 
 use crate::chunk::{
-    linearize_2d, linearize_3d, Chunk, Voxel, AREA, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D, STRIDE_Z_2D, STRIDE_Z_3D
+    AREA, Chunk, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D, STRIDE_Z_2D,
+    STRIDE_Z_3D, Voxel, linearize_2d, linearize_3d,
 };
 
 pub use quad::Quad;
@@ -292,7 +293,7 @@ impl Mesher {
                                         Voxel::Liquid => 0,
                                         Voxel::Solid => 1,
                                     };
-                                    
+
                                     Quad::new(pos, w, h, face, t)
                                 });
 

@@ -97,7 +97,7 @@ pub fn linearize_2d(p: impl Into<[u32; 2]>) -> usize {
     Shape2d::linearize(p.into()) as usize
 }
 
-#[inline]
-pub fn delinearize_2d(i: usize) -> [u32; 2] {
-    Shape2d::delinearize(i as u32)
-}
+// #[inline]
+// pub fn delinearize_2d(i: usize) -> [u32; 2] {
+//     Shape2d::delinearize(i as u32)
+// }

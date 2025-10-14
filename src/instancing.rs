@@ -1,13 +1,9 @@
 use bevy::{
     core_pipeline::core_3d::Transparent3d,
-    ecs::{
-        query::QueryItem,
-        system::{
+    ecs::system::{
             SystemParamItem,
             lifetimeless::{Read, SRes},
         },
-    },
-    math::U8Vec2,
     mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat},
     pbr::{
         MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
@@ -34,11 +30,11 @@ use bevy::{
     },
 };
 
-use crate::mesher::{Face, Quad};
+use crate::mesher::Quad;
 
 const SHADER_ASSET_PATH: &str = "quad.wgsl";
 
-struct QuadInstancingPlugin;
+pub struct QuadInstancingPlugin;
 
 impl Plugin for QuadInstancingPlugin {
     fn build(&self, app: &mut App) {
@@ -57,8 +53,8 @@ impl Plugin for QuadInstancingPlugin {
     }
 }
 
-#[derive(Component, ExtractComponent, Clone, Deref, DerefMut)]
-struct ChunkQuads(Vec<Quad>);
+#[derive(Component, ExtractComponent, Clone, Deref, DerefMut, Default)]
+pub struct ChunkQuads(Vec<Quad>);
 
 fn queue_quads(
     transparent_3d_draw_functions: Res<DrawFunctions<Transparent3d>>,
@@ -123,7 +119,7 @@ fn prepare_instance_buffers(
     for (entity, quads) in &query {
         let buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
             label: Some("instance data buffer"),
-            contents: bytemuck::cast_slice(&quads),
+            contents: bytemuck::cast_slice(quads),
             usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
         });
         commands.entity(entity).insert(InstanceBuffer {

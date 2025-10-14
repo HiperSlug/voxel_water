@@ -12,9 +12,11 @@ use bevy::core_pipeline::Skybox;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
+use bevy::render::view::NoIndirectDrawing;
 
 use crate::chunk::{Chunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
+use crate::instancing::{ChunkQuads, QuadInstancingPlugin};
 use crate::mesher::MESHER;
 
 const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
@@ -22,9 +24,14 @@ const MAX_TIMESTEP: Duration = Duration::from_secs(2);
 
 fn main() {
     let mut app = App::new();
-    app.add_plugins((DefaultPlugins, NoCameraPlayerPlugin, Game))
-        .add_systems(Startup, setup)
-        .run();
+    app.add_plugins((
+        DefaultPlugins,
+        NoCameraPlayerPlugin,
+        Game,
+        QuadInstancingPlugin,
+    ))
+    .add_systems(Startup, setup)
+    .run();
 }
 
 struct Game;
@@ -33,46 +40,46 @@ impl Plugin for Game {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "skybox.ktx2");
 
-        app.insert_resource(Time::<Fixed>::from_hz(10.0))
-            .init_resource::<Chunk>();
+        app.insert_resource(Time::<Fixed>::from_hz(10.0));
 
-        app.add_systems(Startup, init_quad_handles)
+        app
+            // .add_systems(Startup, init_quad_handles)
             .add_systems(FixedUpdate, liquid_tick)
             .add_systems(Update, (render_chunk, rotate_skybox, input));
     }
 }
 
-#[derive(Resource)]
-struct QuadHandles {
-    quad: Handle<Mesh>,
-    liquid: Handle<StandardMaterial>,
-    solid: Handle<StandardMaterial>,
-}
+// #[derive(Resource)]
+// struct QuadHandles {
+//     quad: Handle<Mesh>,
+//     liquid: Handle<StandardMaterial>,
+//     solid: Handle<StandardMaterial>,
+// }
 
-fn init_quad_handles(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    commands.insert_resource(QuadHandles {
-        quad: meshes.add(Rectangle::from_length(1.0)),
-        liquid: materials.add(Color::srgb_u8(235, 244, 250)),
-        solid: materials.add(Color::srgb_u8(235, 244, 250).darker(0.7)),
-    });
-}
+// fn init_quad_handles(
+//     mut commands: Commands,
+//     mut meshes: ResMut<Assets<Mesh>>,
+//     mut materials: ResMut<Assets<StandardMaterial>>,
+// ) {
+//     commands.insert_resource(QuadHandles {
+//         quad: meshes.add(Rectangle::from_length(1.0)),
+//         liquid: materials.add(Color::srgb_u8(235, 244, 250)),
+//         solid: materials.add(Color::srgb_u8(235, 244, 250).darker(0.7)),
+//     });
+// }
 
-#[derive(Component)]
-struct QuadMarker;
+// #[derive(Component)]
+// struct QuadMarker;
+
+#[derive(Component, DerefMut, Deref, Default)]
+struct SmallChunk(Box<Chunk>);
 
 fn setup(
     mut commands: Commands,
-    mut chunk: ResMut<Chunk>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: ResMut<AssetServer>,
 ) {
-    chunk.fill_padding(Some(Voxel::Solid));
-
     // light
     commands.spawn((
         DirectionalLight::default(),
@@ -98,6 +105,7 @@ fn setup(
         },
         Camera3d::default(),
         FlyCam,
+        NoIndirectDrawing, // question
     ));
 
     // chunk aabb
@@ -115,6 +123,11 @@ fn setup(
         Visibility::Hidden,
         SelectedMarker,
     ));
+
+    // chunk
+    let mut chunk = SmallChunk::default();
+    chunk.fill_padding(Some(Voxel::Solid));
+    commands.spawn((chunk, ChunkQuads::default()));
 }
 
 fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
@@ -123,57 +136,59 @@ fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
     skybox.rotation *= Quat::from_rotation_y(delta);
 }
 
-fn liquid_tick(mut chunk: ResMut<Chunk>) {
+fn liquid_tick(mut chunk: Single<&mut SmallChunk>) {
     chunk.liquid_tick();
 }
 
 fn render_chunk(
-    mut commands: Commands,
-    chunk: Res<Chunk>,
-    handles: Res<QuadHandles>,
-    mut old_quads: Query<
-        (
-            &mut Visibility,
-            &mut Transform,
-            &mut MeshMaterial3d<StandardMaterial>,
-        ),
-        With<QuadMarker>,
-    >,
+    // mut commands: Commands,
+    chunk: Single<(&mut SmallChunk, &mut ChunkQuads)>,
+    // handles: Res<QuadHandles>,
+    // mut old_quads: Query<
+    //     (
+    //         &mut Visibility,
+    //         &mut Transform,
+    //         &mut MeshMaterial3d<StandardMaterial>,
+    //     ),
+    //     With<QuadMarker>,
+    // >,
 ) {
+    let (chunk, mut chunk_quads) = chunk.into_inner();
     MESHER.with_borrow_mut(|mesher| {
         let quads = mesher.mesh(&chunk, IVec3::ZERO);
 
-        let mut new_iter = quads.iter();
-        let mut old_iter = old_quads.iter_mut();
+        **chunk_quads = quads.to_vec();
+        // let mut new_iter = quads.iter();
+        // let mut old_iter = old_quads.iter_mut();
 
-        for ((mut visibility, mut transform, mut material), quad) in
-            (&mut old_iter).zip(&mut new_iter)
-        {
-            *transform = quad.rectangle_transform();
-            *visibility = Visibility::Visible;
-            material.0 = match quad.texture() {
-                0 => handles.liquid.clone(),
-                1 => handles.solid.clone(),
-                _ => unreachable!(),
-            };
-        }
+        // for ((mut visibility, mut transform, mut material), quad) in
+        //     (&mut old_iter).zip(&mut new_iter)
+        // {
+        //     *transform = quad.rectangle_transform();
+        //     *visibility = Visibility::Visible;
+        //     material.0 = match quad.texture() {
+        //         0 => handles.liquid.clone(),
+        //         1 => handles.solid.clone(),
+        //         _ => unreachable!(),
+        //     };
+        // }
 
-        for (mut visibility, _, _) in old_iter {
-            *visibility = Visibility::Hidden;
-        }
+        // for (mut visibility, _, _) in old_iter {
+        //     *visibility = Visibility::Hidden;
+        // }
 
-        for quad in new_iter {
-            commands.spawn((
-                quad.rectangle_transform(),
-                Mesh3d(handles.quad.clone()),
-                MeshMaterial3d(match quad.texture() {
-                    0 => handles.liquid.clone(),
-                    1 => handles.solid.clone(),
-                    _ => unreachable!(),
-                }),
-                QuadMarker,
-            ));
-        }
+        // for quad in new_iter {
+        //     commands.spawn((
+        //         quad.rectangle_transform(),
+        //         Mesh3d(handles.quad.clone()),
+        //         MeshMaterial3d(match quad.texture() {
+        //             0 => handles.liquid.clone(),
+        //             1 => handles.solid.clone(),
+        //             _ => unreachable!(),
+        //         }),
+        //         QuadMarker,
+        //     ));
+        // }
     })
 }
 
@@ -184,7 +199,7 @@ fn input(
     mut transforms: Query<&mut Transform>,
     selected_q: Single<(Entity, &mut Visibility), With<SelectedMarker>>,
     mb: Res<ButtonInput<MouseButton>>,
-    mut chunk: ResMut<Chunk>,
+    mut chunk: Single<&mut SmallChunk>,
     player_q: Single<Entity, With<FlyCam>>,
     mut scroll: MessageReader<MouseWheel>,
     mut time_step: ResMut<Time<Fixed>>,
