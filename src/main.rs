@@ -28,9 +28,9 @@ struct Game;
 
 impl Plugin for Game {
     fn build(&self, app: &mut App) {
-        embedded_asset!(app, "skybox.ktx2");
-
         app.add_plugins((DefaultPlugins, NoCameraPlayerPlugin, QuadInstancingPlugin));
+
+        embedded_asset!(app, "skybox.ktx2");
 
         app.insert_resource(Time::<Fixed>::from_hz(10.0));
 
@@ -96,7 +96,11 @@ fn setup(
     // chunk
     let mut chunk = BoxChunk::default();
     chunk.fill_padding(Some(Voxel::Solid));
-    commands.spawn((chunk, ChunkQuads::default()));
+    commands.spawn((
+        Mesh3d(meshes.add(Rectangle::from_length(1.0))),
+        chunk,
+        ChunkQuads::default(),
+    ));
 }
 
 fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
@@ -109,9 +113,7 @@ fn liquid_tick(mut chunk: Single<&mut BoxChunk>) {
     chunk.liquid_tick();
 }
 
-fn render_chunk(
-    chunk: Single<(&mut BoxChunk, &mut ChunkQuads)>,
-) {
+fn render_chunk(chunk: Single<(&mut BoxChunk, &mut ChunkQuads)>) {
     MESHER.with_borrow_mut(|mesher| {
         let (chunk, mut chunk_quads) = chunk.into_inner();
 

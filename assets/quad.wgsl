@@ -1,3 +1,6 @@
+#import bevy_pbr::view_transformations::position_world_to_clip
+#import bevy_pbr::mesh_functions::get_world_from_local
+
 const MASK6: u32 = (1 << 6) - 1;
 const MASK3: u32 = (1 << 3) - 1;
 
@@ -12,16 +15,14 @@ const POS_Y: u32 = 1;
 const POS_Z: u32 = 2;
 const NEG_X: u32 = 3;
 const NEG_Y: u32 = 4;
-const NEG_Z: u32 = 5;
-
-const U16_MAX_F32: f32 = 65535.0;
+// const NEG_Z: u32 = 5;
 
 struct Vertex {
-    @location(0) origin: vec3<f32>,
+    @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
 
-    @location(3) i_pos: vec3<i32>,
+    @location(3) i_position: vec3<i32>,
     @location(4) i_other: u32,
 };
 
@@ -32,21 +33,19 @@ struct VertexOutput {
 
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
-    let size = i_size(vertex.i_other);
-    let face = i_face(vertex.i_other);
-
-    let matrix = face_model_matrix(
-        vertex.i_pos,
-        size,
-        face,
+    let custom_model_matrix = custom_model_matrix(
+        vertex.i_position,
+        i_size(vertex.i_other),
+        i_face(vertex.i_other),
     );
 
-    let clip_position = matrix * vec4<f32>(vertex.origin, 1.0);
+    let model_matrix = get_world_from_local(0u);
+    let p = custom_model_matrix * model_matrix * vec4<f32>(vertex.position, 1.0);
+    let clip_position = position_world_to_clip(p.xyz);
 
-    // placeholderw
+    // TODO: texture indexing
     let texture = i_texture(vertex.i_other);
-    let c = f32(texture) / U16_MAX_F32; 
-    let color = vec4<f32>(c, c, c, 1.0);
+    let color: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 
     var out: VertexOutput;
     out.clip_position = clip_position;
@@ -61,71 +60,77 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
 }
 
 fn i_width(other: u32) -> u32 {
-    (other >> WIDTH_SHIFT) & MASK6
+    return (other >> WIDTH_SHIFT) & MASK6;
 }
 
 fn i_height(other: u32) -> u32 {
-    (other >> HEIGHT_SHIFT) & MASK6
+    return (other >> HEIGHT_SHIFT) & MASK6;
 }
 
 fn i_size(other: u32) -> vec2<u32> {
-    vec2<u32>(i_width(other), i_height(other))
+    return vec2<u32>(i_width(other), i_height(other));
 }
 
 fn i_face(other: u32) -> u32 {
-    (other >> FACE_SHIFT) & MASK3
+    return (other >> FACE_SHIFT) & MASK3;
 }
 
 fn i_texture(other: u32) -> u32 {
-    other >> TEXTURE_SHIFT
+    return other >> TEXTURE_SHIFT;
 }
 
-// AI
-fn face_model_matrix(
-    pos: vec3<i32>,
-    size: vec2<u32>,
-    face: u32,
-) -> mat4x4<f32> {
-    let p = vec3<f32>(pos);
-    let s = vec2<f32>(size);
-    
-    switch(face) {
-		case POS_X: return mat4x4<f32>(
-			vec4<f32>(0.0, 0.0, -s.x, 0.0),
-			vec4<f32>(0.0, s.y, 0.0, 0.0),
-			vec4<f32>(1.0, 0.0, 0.0, 0.0),
-			vec4<f32>(p.x + 0.5, p.y + s.y * 0.5, p.z + s.x * 0.5, 1.0)
-		);
-		case NEG_X: return mat4x4<f32>(
-			vec4<f32>(0.0, 0.0, s.x, 0.0),
-			vec4<f32>(0.0, s.y, 0.0, 0.0),
-			vec4<f32>(-1.0, 0.0, 0.0, 0.0),
-			vec4<f32>(p.x - 0.5, p.y + s.y * 0.5, p.z + s.x * 0.5, 1.0)
-		);
-		case POS_Y: return mat4x4<f32>(
-			vec4<f32>(s.x, 0.0, 0.0, 0.0),
-			vec4<f32>(0.0, 0.0, s.y, 0.0),
-			vec4<f32>(0.0, 1.0, 0.0, 0.0),
-			vec4<f32>(p.x + s.x * 0.5, p.y + 0.5, p.z + s.y * 0.5, 1.0)
-		);
-		case NEG_Y: return mat4x4<f32>(
-			vec4<f32>(s.x, 0.0, 0.0, 0.0),
-			vec4<f32>(0.0, 0.0, -s.y, 0.0),
-			vec4<f32>(0.0, -1.0, 0.0, 0.0),
-			vec4<f32>(p.x + s.x * 0.5, p.y - 0.5, p.z + s.y * 0.5, 1.0)
-		);
-		case POS_Z: return mat4x4<f32>(
-			vec4<f32>(s.x, 0.0, 0.0, 0.0),
-			vec4<f32>(0.0, s.y, 0.0, 0.0),
-			vec4<f32>(0.0, 0.0, 1.0, 0.0),
-			vec4<f32>(p.x + s.x * 0.5, p.y + s.y * 0.5, p.z + 0.5, 1.0)
-		);
-		case NEG_Z: return mat4x4<f32>(
-			vec4<f32>(s.x, 0.0, 0.0, 0.0),
-			vec4<f32>(0.0, s.y, 0.0, 0.0),
-			vec4<f32>(0.0, 0.0, -1.0, 0.0),
-			vec4<f32>(p.x + s.x * 0.5, p.y + s.y * 0.5, p.z - 0.5, 1.0)
-		);
-        case default: return mat4x4<f32>(1.0);
-	}
+fn custom_model_matrix(i_position: vec3<i32>, i_size: vec2<u32>, i_face: u32) -> mat4x4<f32> {
+    let p = vec3<f32>(i_position);
+    let s = vec2<f32>(i_size);
+
+    switch(i_face) {
+        case POS_X: {
+            return mat4x4<f32>(
+                vec4<f32>(0.0, 0.0, -s.x, 0.0),
+                vec4<f32>(0.0, s.y, 0.0, 0.0),
+                vec4<f32>(1.0, 0.0, 0.0, 0.0),
+                vec4<f32>(p, 1.0)
+            );
+        }
+        case POS_Y: {
+            return mat4x4<f32>(
+                vec4<f32>(s.x, 0.0, 0.0, 0.0),
+                vec4<f32>(0.0, 0.0, s.y, 0.0),
+                vec4<f32>(0.0, -1.0, 0.0, 0.0),
+                vec4<f32>(p, 1.0)
+            );
+        }
+        case POS_Z: {
+            return mat4x4<f32>(
+                vec4<f32>(s.x, 0.0, 0.0, 0.0),
+                vec4<f32>(0.0, s.y, 0.0, 0.0),
+                vec4<f32>(0.0, 0.0, -1.0, 0.0),
+                vec4<f32>(p, 1.0)
+            );
+        }
+        case NEG_X: {
+            return mat4x4<f32>(
+                vec4<f32>(0.0, 0.0, s.x, 0.0),
+                vec4<f32>(0.0, s.y, 0.0, 0.0),
+                vec4<f32>(-1.0, 0.0, 0.0, 0.0),
+                vec4<f32>(p, 1.0)
+            );
+        }
+        case NEG_Y: {
+            return mat4x4<f32>(
+                vec4<f32>(s.x, 0.0, 0.0, 0.0),
+                vec4<f32>(0.0, 0.0, -s.y, 0.0),
+                vec4<f32>(0.0, 1.0, 0.0, 0.0),
+                vec4<f32>(p, 1.0)
+            );
+        }
+        case default: { // NEG_Z
+            return mat4x4<f32>(
+                vec4<f32>(s.x, 0.0, 0.0, 0.0),
+                vec4<f32>(0.0, s.y, 0.0, 0.0),
+                vec4<f32>(0.0, 0.0, 1.0, 0.0),
+                vec4<f32>(p, 1.0)
+            );
+        }
+    }
 }

@@ -218,11 +218,16 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
         let Some(instance_buffer) = instance_buffer else {
             return RenderCommandResult::Skip;
         };
+        if instance_buffer.length == 0 {
+            return RenderCommandResult::Skip;
+        }
         let Some(vertex_buffer_slice) =
             mesh_allocator.mesh_vertex_slice(&mesh_instance.mesh_asset_id)
         else {
             return RenderCommandResult::Skip;
         };
+
+        // info!("{}", instance_buffer.length); // reached
 
         pass.set_vertex_buffer(0, vertex_buffer_slice.buffer.slice(..));
         pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
