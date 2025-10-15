@@ -79,9 +79,11 @@ fn i_texture(other: u32) -> u32 {
     return other >> TEXTURE_SHIFT;
 }
 
+// TODO: drop the matrix and just do the math raw
 fn custom_model_matrix(i_position: vec3<i32>, i_size: vec2<u32>, i_face: u32) -> mat4x4<f32> {
     let p = vec3<f32>(i_position);
     let s = vec2<f32>(i_size);
+    let h = s / 2.0;
 
     switch(i_face) {
         case POS_X: {
@@ -89,23 +91,7 @@ fn custom_model_matrix(i_position: vec3<i32>, i_size: vec2<u32>, i_face: u32) ->
                 vec4<f32>(0.0, 0.0, -s.x, 0.0),
                 vec4<f32>(0.0, s.y, 0.0, 0.0),
                 vec4<f32>(1.0, 0.0, 0.0, 0.0),
-                vec4<f32>(p, 1.0)
-            );
-        }
-        case POS_Y: {
-            return mat4x4<f32>(
-                vec4<f32>(s.x, 0.0, 0.0, 0.0),
-                vec4<f32>(0.0, 0.0, s.y, 0.0),
-                vec4<f32>(0.0, -1.0, 0.0, 0.0),
-                vec4<f32>(p, 1.0)
-            );
-        }
-        case POS_Z: {
-            return mat4x4<f32>(
-                vec4<f32>(s.x, 0.0, 0.0, 0.0),
-                vec4<f32>(0.0, s.y, 0.0, 0.0),
-                vec4<f32>(0.0, 0.0, -1.0, 0.0),
-                vec4<f32>(p, 1.0)
+                vec4<f32>(p.x + 1.0, p.y + h.y, p.z + h.x, 1.0)
             );
         }
         case NEG_X: {
@@ -113,23 +99,39 @@ fn custom_model_matrix(i_position: vec3<i32>, i_size: vec2<u32>, i_face: u32) ->
                 vec4<f32>(0.0, 0.0, s.x, 0.0),
                 vec4<f32>(0.0, s.y, 0.0, 0.0),
                 vec4<f32>(-1.0, 0.0, 0.0, 0.0),
-                vec4<f32>(p, 1.0)
+                vec4<f32>(p.x, p.y + h.y, p.z + h.x, 1.0)
             );
         }
-        case NEG_Y: {
+        case POS_Y: {
             return mat4x4<f32>(
                 vec4<f32>(s.x, 0.0, 0.0, 0.0),
                 vec4<f32>(0.0, 0.0, -s.y, 0.0),
                 vec4<f32>(0.0, 1.0, 0.0, 0.0),
-                vec4<f32>(p, 1.0)
+                vec4<f32>(p.x + h.x, p.y + 1.0, p.z + h.y, 1.0)
+            );
+        }
+        case NEG_Y: {
+            return mat4x4<f32>(
+                vec4<f32>(-s.x, 0.0, 0.0, 0.0),
+                vec4<f32>(0.0, 0.0, s.y, 0.0),
+                vec4<f32>(0.0, -1.0, 0.0, 0.0),
+                vec4<f32>(p.x + h.x, p.y, p.z + h.y, 1.0)
+            );
+        }
+        case POS_Z: {
+            return mat4x4<f32>(
+                vec4<f32>(s.x, 0.0, 0.0, 0.0),
+                vec4<f32>(0.0, s.y, 0.0, 0.0),
+                vec4<f32>(0.0, 0.0, -1.0, 0.0),
+                vec4<f32>(p.x + h.x, p.y + h.y, p.z + 1.0, 1.0)
             );
         }
         case default: { // NEG_Z
             return mat4x4<f32>(
-                vec4<f32>(s.x, 0.0, 0.0, 0.0),
+                vec4<f32>(-s.x, 0.0, 0.0, 0.0),
                 vec4<f32>(0.0, s.y, 0.0, 0.0),
                 vec4<f32>(0.0, 0.0, 1.0, 0.0),
-                vec4<f32>(p, 1.0)
+                vec4<f32>(p.x + h.x, p.y + h.y, p.z, 1.0)
             );
         }
     }

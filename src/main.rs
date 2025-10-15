@@ -6,6 +6,7 @@ use std::f32::consts::PI;
 use std::time::Duration;
 
 use bevy::asset::{embedded_asset, load_embedded_asset};
+use bevy::camera::visibility::NoFrustumCulling;
 use bevy::core_pipeline::Skybox;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::mesh::{Indices, PrimitiveTopology};
@@ -100,6 +101,7 @@ fn setup(
         Mesh3d(meshes.add(Rectangle::from_length(1.0))),
         chunk,
         ChunkQuads::default(),
+        NoFrustumCulling,
     ));
 }
 
