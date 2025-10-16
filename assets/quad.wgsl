@@ -45,8 +45,16 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     // TODO: texture indexing
     let texture = i_texture(vertex.i_other);
-    let color: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
-
+    var color: vec4<f32>;
+    switch(texture) {
+        case 0: {
+            color = vec4(1.0, 1.0, 1.0, 1.0);
+        }
+        case default: {
+            color = vec4(0.8, 0.8, 0.5, 1.0);
+        }
+    }
+    
     var out: VertexOutput;
     out.clip_position = clip_position;
     out.color = color;
