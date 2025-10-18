@@ -164,16 +164,16 @@ impl SpecializedMeshPipeline for CustomPipeline {
                 VertexAttribute {
                     format: VertexFormat::Sint32x3,
                     offset: 0,
-                    shader_location: 3, // shader locations 0-2 are taken up by Position, Normal and UV attributes
+                    shader_location: 8, // shader locations 0-2 are taken up by Position, Normal and UV attributes
                 },
                 VertexAttribute {
                     format: VertexFormat::Uint32,
                     offset: VertexFormat::Sint32x3.size(),
-                    shader_location: 4,
+                    shader_location: 9,
                 },
             ],
         });
-        descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
+        // descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
         Ok(descriptor)
     }
 }
