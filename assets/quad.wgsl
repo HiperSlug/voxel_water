@@ -42,8 +42,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
     out.uv = vertex.uv * s;
 
-    // This is a rotation(basis swap) + scaling + offset
-    // For some it works with +1.0, -0.0 instead of +0.5, -0.5
     switch(instance_face) {
         case POS_X: {
             position = vec3(1.0, p.y * s.y + h.y, -p.x * s.x + h.x);
@@ -70,17 +68,34 @@ fn vertex(vertex: Vertex) -> VertexOutput {
             out.world_normal = vec3(-n.x, n.y, -n.z);
         }
     }
-    position += vertex.instance_position;
+    position += vec3<f32>(vertex.instance_position);
 
     let world_position = vec4(position, 1.0);
 
+    var identity: mat4x4<f32> = mat4x4<f32>(
+        vec4<f32>(1.0, 0.0, 0.0, 0.0),
+        vec4<f32>(0.0, 1.0, 0.0, 0.0),
+        vec4<f32>(0.0, 0.0, 1.0, 0.0),
+        vec4<f32>(0.0, 0.0, 0.0, 1.0)
+    );
+
+    // TODO: workaround through uniform
     out.world_position = world_position;
     out.position = mesh_position_local_to_clip(
-        get_world_from_local(0u),
+        identity,
+        // get_world_from_local(0u),
         world_position
     );
 
     // TODO: texture_indexing
+    switch(instance_texture) {
+        case 0: {
+            out.color = vec4(0.5, 0.8, 0.8, 1.0);
+        }
+        case default: {
+            out.color = vec4(0.8, 0.8, 0.5, 1.0);
+        }
+    }
 
     return out;
 }

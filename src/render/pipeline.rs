@@ -89,6 +89,7 @@ fn queue_quads(
             };
             let key =
                 view_key | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology());
+
             let pipeline = pipelines
                 .specialize(&pipeline_cache, &custom_pipeline, key, &mesh.layout)
                 .unwrap();
@@ -164,7 +165,7 @@ impl SpecializedMeshPipeline for CustomPipeline {
                 VertexAttribute {
                     format: VertexFormat::Sint32x3,
                     offset: 0,
-                    shader_location: 8, // shader locations 0-2 are taken up by Position, Normal and UV attributes
+                    shader_location: 8,
                 },
                 VertexAttribute {
                     format: VertexFormat::Uint32,

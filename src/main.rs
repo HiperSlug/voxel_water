@@ -95,13 +95,21 @@ fn setup(
     ));
 
     // chunk
+    let quad = Rectangle::from_length(1.0)
+        .mesh()
+        .build()
+        .with_inserted_attribute(
+            Mesh::ATTRIBUTE_COLOR,
+            vec![Color::WHITE.to_srgba().to_vec4(); 4],
+        );
     let mut chunk = BoxChunk::default();
     chunk.fill_padding(Some(Voxel::Solid));
     commands.spawn((
-        Mesh3d(meshes.add(Rectangle::from_length(1.0))),
+        Mesh3d(meshes.add(quad)),
         chunk,
         ChunkQuads::default(),
         NoFrustumCulling,
+        // QuadMaterial3d(MeshMaterial3d(materials.add(color)))
     ));
 }
 
@@ -137,8 +145,13 @@ fn input(
     mut scroll: MessageReader<MouseWheel>,
     mut time_step: ResMut<Time<Fixed>>,
     mut anchor: Local<UVec3>,
+    chunk_quads: Single<&ChunkQuads>,
 ) {
     let transform = transforms.get(*player_q).unwrap();
+
+    if mb.just_pressed(MouseButton::Back) {
+        println!("{:?}", chunk_quads[0]);
+    }
 
     let [last, dst] = chunk.raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
 
