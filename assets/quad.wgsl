@@ -97,6 +97,28 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         }
     }
 
+    // TODO: lighting
+    switch(instance_face) {
+        case POS_X: {
+            out.color *= 0.9;
+        }
+        case NEG_X: {
+            out.color *= 0.1;
+        }
+        case POS_Y: {
+            out.color *= 0.8;
+        }
+        case NEG_Y: {
+            out.color *= 0.2;
+        }
+        case POS_Z: {
+            out.color *= 0.7;
+        }
+        case default: { // && NEG_Z
+            out.color *= 0.3;
+        }
+    }
+
     return out;
 }
 
