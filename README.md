@@ -6,5 +6,9 @@ This is the continuation of my voxel water project. This week I setup a custom r
 
 Additionally I fixed the collision bias where certain cells would get priority if multiple tried to go to the same cell. My inital solution didn't work and so I replaced it with a suboptimal but random solution. I have an idea on something that might be faster my having reversable moves.
 
+I [learned](https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab) basic linear algebra for the transforms. 
+
+I also wrote some shaders in wgsl.
+
 # Theme 
 This project is loosly liked to the theme "Signals". For example voxel changes propagate signals through chains of liquid like physics. Additionally this week quad data needs to be constantly streamed (signaled) to the gpu to render updated voxels.
