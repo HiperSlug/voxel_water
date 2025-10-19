@@ -1,43 +1,29 @@
 use bevy::{
-    core_pipeline::core_3d::Transparent3d,
-    ecs::system::{
-        SystemParamItem,
-        lifetimeless::{Read, SRes},
-    },
-    mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat},
-    pbr::{
+    asset::{embedded_asset, load_embedded_asset}, core_pipeline::core_3d::Transparent3d, ecs::system::{
+        lifetimeless::{Read, SRes}, SystemParamItem
+    }, mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat}, pbr::{
         MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
         SetMeshViewBindingArrayBindGroup,
-    },
-    prelude::*,
-    render::{
-        Render, RenderApp, RenderStartup, RenderSystems,
-        extract_component::{ExtractComponent, ExtractComponentPlugin},
-        mesh::{RenderMesh, RenderMeshBufferInfo, allocator::MeshAllocator},
-        render_asset::RenderAssets,
-        render_phase::{
+    }, prelude::*, render::{
+        extract_component::{ExtractComponent, ExtractComponentPlugin}, mesh::{allocator::MeshAllocator, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_phase::{
             AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
             RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
-        },
-        render_resource::{
+        }, render_resource::{
             Buffer, BufferInitDescriptor, BufferUsages, PipelineCache, RenderPipelineDescriptor,
             SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
             VertexAttribute, VertexStepMode,
-        },
-        renderer::RenderDevice,
-        sync_world::MainEntity,
-        view::ExtractedView,
-    },
+        }, renderer::RenderDevice, sync_world::MainEntity, view::ExtractedView, Render, RenderApp, RenderStartup, RenderSystems
+    }
 };
 
 use super::Quad;
-
-const SHADER_ASSET_PATH: &str = "quad.wgsl";
 
 pub struct QuadInstancingPlugin;
 
 impl Plugin for QuadInstancingPlugin {
     fn build(&self, app: &mut App) {
+        embedded_asset!(app, "quad.wgsl");
+
         app.add_plugins(ExtractComponentPlugin::<ChunkQuads>::default());
         app.sub_app_mut(RenderApp)
             .add_render_command::<Transparent3d, DrawCustom>()
@@ -142,7 +128,7 @@ fn init_custom_pipeline(
     mesh_pipeline: Res<MeshPipeline>,
 ) {
     commands.insert_resource(CustomPipeline {
-        shader: asset_server.load(SHADER_ASSET_PATH),
+        shader: load_embedded_asset!(&*asset_server, "quad.wgsl"),
         mesh_pipeline: mesh_pipeline.clone(),
     });
 }

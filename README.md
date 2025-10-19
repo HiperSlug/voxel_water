@@ -1,18 +1,10 @@
-# Voxel Water
-A real-time voxel simulation of water physics. 
+# Voxel Water 
+A cellular based water simulation in a voxel grid. It's governed by simple gravity and kicking (pushing away from eachother) rules that allow the water to spread out.
 
-At its core each cell just tries to move into each of the 9 cells below it. If that fails it slides away from adjacent cells.
+# Update
+This is the continuation of my voxel water project. This week I setup a custom rendering pipeline for instanced quads based on this [video](https://www.youtube.com/watch?v=40JzyaOYJeY) with adaptations and concessions based on what I'm doing. It currently acts the same as the previous renderer however it's true utility comes in the ability to manually control data flow to allow better culling as well as cheaper per-instance data. 
 
-I setup a decent cpu (not gpu b/c real-time) simulation based on some techniques I learned from [binary-greedy-meshing](https://github.com/Inspirateur/binary-greedy-meshing) as well as my own thoughts on how to best handle collisions in a consistent (if not deterministic) way. I also included an implementation of binary-greedy-meshing for ridiculously fast meshing thats far more readable than the original (in my opinion). 
+Additionally I fixed the collision bias where certain cells would get priority if multiple tried to go to the same cell. My inital solution didn't work and so I replaced it with a suboptimal but random solution. I have an idea on something that might be faster my having reversable moves.
 
-I also learned how voxel raytracing works.
-
-# Future
-Move priority. Because of iteration order certain cells have move priority resulting in non-symetrical simulation. I have a solution that would resolve this but it requires some rewriting.
-
-Meshing. The chunk is changing every frame. I think I can impliment iterative (modify an old mesh instead of rebuilding) meshing using the same algorithms I do now.
-
-Rendering. Currently I'm instancing Quad meshes using bevys mesh instancing. A custom rendering pipeline would be faster and allow me to cull about twice as many quads. Also texturing, transparency, and non-full blocks.
-
-# Magic
-There are wands! YAYYYY!
+# Theme 
+This project is loosly liked to the theme "Signals". For example voxel changes propagate signals through chains of liquid like physics. Additionally this week quad data needs to be constantly streamed (signaled) to the gpu to render updated voxels.

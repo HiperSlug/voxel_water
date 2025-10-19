@@ -87,37 +87,40 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         world_position
     );
 
+    var color: vec3<f32>;
+
     // TODO: texture_indexing
     switch(instance_texture) {
         case 0: {
-            out.color = vec4(0.5, 0.8, 0.8, 1.0);
+            color = vec3(0.5, 0.8, 0.8);
         }
         case default: {
-            out.color = vec4(0.8, 0.8, 0.5, 1.0);
+            color = vec3(0.8, 0.8, 0.5);
         }
     }
 
     // TODO: lighting
     switch(instance_face) {
         case POS_X: {
-            out.color *= 0.9;
+            color *= 0.9;
         }
         case NEG_X: {
-            out.color *= 0.1;
+            color *= 0.1;
         }
         case POS_Y: {
-            out.color *= 0.8;
+            color *= 0.8;
         }
         case NEG_Y: {
-            out.color *= 0.2;
+            color *= 0.2;
         }
         case POS_Z: {
-            out.color *= 0.7;
+            color *= 0.7;
         }
         case default: { // && NEG_Z
-            out.color *= 0.3;
+            color *= 0.3;
         }
     }
+    out.color = vec4(color, 1.0);
 
     return out;
 }
