@@ -1,6 +1,7 @@
+use bevy::platform::hash::FixedState;
+use rand::random;
 use std::array;
-use std::hash::{BuildHasher, Hasher, RandomState};
-use rand::{random, rng, prelude::*};
+use std::hash::{BuildHasher, Hash, Hasher, RandomState};
 
 use super::*;
 
@@ -26,15 +27,12 @@ impl Chunk {
         *write = read.clone();
 
         let voxels = &mut self.voxels;
+        let dst_to_src = &mut self.dst_to_src;
+        let tick = self.tick;
+        self.tick = tick + 1;
 
-        // TODO: a deterministic solution to handling priority.
-        let mut zs: [_; LEN - 2] = array::from_fn(|i| i as u32 + 1);
-        let mut ys: [_; LEN - 2] = array::from_fn(|i| i as u32 + 1);
-        
-        zs.shuffle(&mut rng());
-        for z in zs {
-            ys.shuffle(&mut rng());
-            'row: for y in ys {
+        for z in 1..LEN_U32 - 1 {
+            'row: for y in 1..LEN_U32 - 1 {
                 let i = linearize_2d([y, z]);
                 let yz_i_3d = linearize_3d([0, y, z]);
 
@@ -48,19 +46,33 @@ impl Chunk {
 
                 // down
                 {
-                    let fall = liquid & !read.some_mask[ny_i] & !write.some_mask[ny_i];
+                    let fall = liquid & !read.some_mask[ny_i];
+                    let success = fall & !write.some_mask[ny_i];
+                    let collisions = fall & write.some_mask[ny_i];
 
                     move_liquid(
-                        &mut liquid,
-                        write,
                         voxels,
-                        fall,
-                        fall,
+                        write,
+                        success,
+                        success,
                         i,
                         ny_i,
                         yz_i_3d,
                         -I_STRIDE_Y_3D,
                     );
+
+                    handle_collisions(
+                        voxels,
+                        write,
+                        collisions,
+                        [y, z],
+                        [y - 1, z],
+                        0,
+                        dst_to_src,
+                        tick,
+                    );
+
+                    liquid &= !fall;
 
                     if liquid == 0 {
                         continue 'row;
@@ -94,25 +106,29 @@ impl Chunk {
 
                         let (rm, add, src_i_2d, dst_i_2d, stride_3d) = match dir {
                             PosX => {
-                                let fall = (group << 1) & !read.some_mask[ny_i] & !write.some_mask[ny_i];
+                                let fall =
+                                    (group << 1) & !read.some_mask[ny_i] & !write.some_mask[ny_i];
 
                                 const S: isize = I_STRIDE_X_3D - I_STRIDE_Y_3D;
                                 (fall >> 1, fall, i, ny_i, S)
                             }
                             NegX => {
-                                let fall = (group >> 1) & !read.some_mask[ny_i] & !write.some_mask[ny_i];
+                                let fall =
+                                    (group >> 1) & !read.some_mask[ny_i] & !write.some_mask[ny_i];
 
                                 const S: isize = -I_STRIDE_X_3D - I_STRIDE_Y_3D;
                                 (fall << 1, fall, i, ny_i, S)
                             }
                             PosZ => {
-                                let fall = group & !read.some_mask[ny_pz_i] & !write.some_mask[ny_pz_i];
+                                let fall =
+                                    group & !read.some_mask[ny_pz_i] & !write.some_mask[ny_pz_i];
 
                                 const S: isize = -I_STRIDE_Y_3D + I_STRIDE_Z_3D;
                                 (fall, fall, i, ny_pz_i, S)
                             }
                             NegZ => {
-                                let fall = group & !read.some_mask[ny_nz_i] & !write.some_mask[ny_nz_i];
+                                let fall =
+                                    group & !read.some_mask[ny_nz_i] & !write.some_mask[ny_nz_i];
 
                                 const S: isize = -I_STRIDE_Y_3D - I_STRIDE_Z_3D;
                                 (fall, fall, i, ny_nz_i, S)
@@ -150,25 +166,33 @@ impl Chunk {
 
                         let (rm, add, src_i_2d, dst_i_2d, stride_3d) = match dir {
                             PosX => {
-                                let fall = (group << 1) & !read.some_mask[ny_nz_i] & !write.some_mask[ny_nz_i];
+                                let fall = (group << 1)
+                                    & !read.some_mask[ny_nz_i]
+                                    & !write.some_mask[ny_nz_i];
 
                                 const S: isize = I_STRIDE_X_3D - I_STRIDE_Y_3D - I_STRIDE_Z_3D;
                                 (fall >> 1, fall, i, ny_nz_i, S)
                             }
                             NegX => {
-                                let fall = (group >> 1) & !read.some_mask[ny_pz_i] & !write.some_mask[ny_pz_i];
+                                let fall = (group >> 1)
+                                    & !read.some_mask[ny_pz_i]
+                                    & !write.some_mask[ny_pz_i];
 
                                 const S: isize = -I_STRIDE_X_3D - I_STRIDE_Y_3D + I_STRIDE_Z_3D;
                                 (fall << 1, fall, i, ny_pz_i, S)
                             }
                             PosZ => {
-                                let fall = (group << 1) & !read.some_mask[ny_pz_i] & !write.some_mask[ny_pz_i];
+                                let fall = (group << 1)
+                                    & !read.some_mask[ny_pz_i]
+                                    & !write.some_mask[ny_pz_i];
 
                                 const S: isize = I_STRIDE_X_3D - I_STRIDE_Y_3D + I_STRIDE_Z_3D;
                                 (fall >> 1, fall, i, ny_pz_i, S)
                             }
                             NegZ => {
-                                let fall = (group >> 1) & !read.some_mask[ny_nz_i] & !write.some_mask[ny_nz_i];
+                                let fall = (group >> 1)
+                                    & !read.some_mask[ny_nz_i]
+                                    & !write.some_mask[ny_nz_i];
 
                                 const S: isize = -I_STRIDE_X_3D - I_STRIDE_Y_3D - I_STRIDE_Z_3D;
                                 (fall << 1, fall, i, ny_nz_i, S)
@@ -209,25 +233,37 @@ impl Chunk {
 
                         let (rm, add, src_i_2d, dst_i_2d, stride_3d) = match dir {
                             PosX => {
-                                let slide = group & !(read.some_mask[i] >> 1) & (read.some_mask[i] << 1) & !(write.some_mask[i] >> 1);
+                                let slide = group
+                                    & !(read.some_mask[i] >> 1)
+                                    & (read.some_mask[i] << 1)
+                                    & !(write.some_mask[i] >> 1);
 
                                 const S: isize = I_STRIDE_X_3D;
                                 (slide, slide << 1, i, i, S)
                             }
                             NegX => {
-                                let slide = group & !(read.some_mask[i] << 1) & (read.some_mask[i] >> 1) & !(write.some_mask[i] << 1);
+                                let slide = group
+                                    & !(read.some_mask[i] << 1)
+                                    & (read.some_mask[i] >> 1)
+                                    & !(write.some_mask[i] << 1);
 
                                 const S: isize = -I_STRIDE_X_3D;
                                 (slide, slide >> 1, i, i, S)
                             }
                             PosZ => {
-                                let slide = group & !read.some_mask[pz_i] & read.some_mask[nz_i] & !write.some_mask[pz_i];
+                                let slide = group
+                                    & !read.some_mask[pz_i]
+                                    & read.some_mask[nz_i]
+                                    & !write.some_mask[pz_i];
 
                                 const S: isize = I_STRIDE_Z_3D;
                                 (slide, slide, i, pz_i, S)
                             }
                             NegZ => {
-                                let slide = group & !read.some_mask[nz_i] & read.some_mask[pz_i] & !write.some_mask[nz_i];
+                                let slide = group
+                                    & !read.some_mask[nz_i]
+                                    & read.some_mask[pz_i]
+                                    & !write.some_mask[nz_i];
 
                                 const S: isize = -I_STRIDE_Z_3D;
                                 (slide, slide, i, nz_i, S)
@@ -258,9 +294,8 @@ impl Chunk {
 
 #[inline]
 fn move_liquid(
-    liquid: &mut u64,
-    write: &mut Masks,
     voxels: &mut Voxels,
+    write: &mut Masks,
     rm: u64,
     add: u64,
     src_i_2d: usize,
@@ -273,7 +308,6 @@ fn move_liquid(
     }
 
     // masks
-    *liquid &= !rm;
     write.some_mask[src_i_2d] &= !rm;
     write.liquid_mask[src_i_2d] &= !rm;
 
@@ -291,5 +325,41 @@ fn move_liquid(
 
         voxels[dst_i_3d] = voxels[src_i_3d];
         voxels[src_i_3d] = None;
+    }
+}
+
+#[inline]
+fn handle_collisions(
+    voxels: &mut Voxels,
+    write: &mut Masks,
+    mut collisions: u64,
+    [src_y, src_z]: [u32; 2],
+    [dst_y, dst_z]: [u32; 2],
+    x_shift: i32,
+    dst_to_src: &mut HashMap<UVec3, UVec3>,
+    tick: u64,
+) {
+    let state = FixedState::with_seed(tick);
+
+    while collisions != 0 {
+        let x = collisions.trailing_zeros();
+        collisions &= collisions - 1;
+
+        let dst_x = (x as i32 + x_shift) as u32;
+        let dst = uvec3(dst_x, dst_y, dst_z);
+
+        let old_src = dst_to_src.get_mut(&dst).unwrap();
+
+        let src = uvec3(x, src_y, src_z);
+
+        let old_priority = state.hash_one(*old_src);
+        let priority = state.hash_one(src);
+
+        if priority >= old_priority {
+            copy_within(voxels, write, dst, *old_src);
+            copy_within(voxels, write, src, dst);
+            set(voxels, write, src, None);
+            *old_src = src;
+        }
     }
 }

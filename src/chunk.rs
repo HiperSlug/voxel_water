@@ -2,7 +2,7 @@ pub mod double_buffered;
 mod liquid_tick;
 mod masks;
 
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 use double_buffered::DoubleBuffered;
 use ndshape::{ConstPow2Shape3u32, ConstShape as _};
 
@@ -32,6 +32,8 @@ pub enum Voxel {
 pub struct Chunk {
     pub voxels: Voxels,
     pub masks: DoubleBuffered<Masks>,
+    dst_to_src: HashMap<UVec3, UVec3>,
+    tick: u64,
 }
 
 impl Default for Chunk {
@@ -39,16 +41,16 @@ impl Default for Chunk {
         Self {
             voxels: [None; VOL],
             masks: default(),
+            dst_to_src: default(),
+            tick: 0,
         }
     }
 }
 
 impl Chunk {
+    #[inline]
     pub fn set(&mut self, p: impl Into<[u32; 3]> + Copy, v: Option<Voxel>) {
-        let i = linearize_3d(p);
-        self.voxels[i] = v;
-
-        self.masks.front_mut().set(p, v);
+        set(&mut self.voxels, &mut self.masks.front_mut(), p, v)
     }
 
     pub fn fill_padding(&mut self, v: Option<Voxel>) {
@@ -148,3 +150,30 @@ pub fn linearize_3d(p: impl Into<[u32; 3]>) -> usize {
 // pub fn delinearize_3d(i: usize) -> [u32; 3] {
 //     Shape3d::delinearize(i as u32)
 // }
+
+#[inline]
+pub fn set(
+    voxels: &mut Voxels,
+    masks: &mut Masks,
+    p: impl Into<[u32; 3]> + Copy,
+    v: Option<Voxel>,
+) {
+    let i = linearize_3d(p);
+    voxels[i] = v;
+
+    masks.set(p, v);
+}
+
+#[inline]
+pub fn copy_within(
+    voxels: &mut Voxels,
+    masks: &mut Masks,
+    src: impl Into<[u32; 3]> + Copy,
+    dst: impl Into<[u32; 3]> + Copy,
+) {
+    let dst_i = linearize_3d(dst);
+    let src_i = linearize_3d(src);
+
+    voxels[dst_i] = voxels[src_i];
+    masks.copy_within(src, dst);
+}

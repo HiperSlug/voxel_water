@@ -1,19 +1,34 @@
 use bevy::{
-    asset::{embedded_asset, load_embedded_asset}, core_pipeline::core_3d::Transparent3d, ecs::system::{
-        lifetimeless::{Read, SRes}, SystemParamItem
-    }, mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat}, pbr::{
+    asset::{embedded_asset, load_embedded_asset},
+    core_pipeline::core_3d::Transparent3d,
+    ecs::system::{
+        SystemParamItem,
+        lifetimeless::{Read, SRes},
+    },
+    mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat},
+    pbr::{
         MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
         SetMeshViewBindingArrayBindGroup,
-    }, prelude::*, render::{
-        extract_component::{ExtractComponent, ExtractComponentPlugin}, mesh::{allocator::MeshAllocator, RenderMesh, RenderMeshBufferInfo}, render_asset::RenderAssets, render_phase::{
+    },
+    prelude::*,
+    render::{
+        Render, RenderApp, RenderStartup, RenderSystems,
+        extract_component::{ExtractComponent, ExtractComponentPlugin},
+        mesh::{RenderMesh, RenderMeshBufferInfo, allocator::MeshAllocator},
+        render_asset::RenderAssets,
+        render_phase::{
             AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
             RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
-        }, render_resource::{
+        },
+        render_resource::{
             Buffer, BufferInitDescriptor, BufferUsages, PipelineCache, RenderPipelineDescriptor,
             SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
             VertexAttribute, VertexStepMode,
-        }, renderer::RenderDevice, sync_world::MainEntity, view::ExtractedView, Render, RenderApp, RenderStartup, RenderSystems
-    }
+        },
+        renderer::RenderDevice,
+        sync_world::MainEntity,
+        view::ExtractedView,
+    },
 };
 
 use super::Quad;
