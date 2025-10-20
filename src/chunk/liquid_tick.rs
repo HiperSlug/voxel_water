@@ -53,6 +53,7 @@ impl Chunk {
                     move_liquid(
                         voxels,
                         write,
+                        dst_to_src,
                         success,
                         success,
                         i,
@@ -64,11 +65,11 @@ impl Chunk {
                     handle_collisions(
                         voxels,
                         write,
-                        collisions,
-                        [y, z],
-                        [y - 1, z],
-                        0,
                         dst_to_src,
+                        collisions,
+                        i,
+                        yz_i_3d,
+                        -I_STRIDE_Y_3D,
                         tick,
                     );
 
@@ -143,7 +144,6 @@ impl Chunk {
                             add,
                             src_i_2d,
                             dst_i_2d,
-                            yz_i_3d,
                             stride_3d,
                         );
 
@@ -296,6 +296,7 @@ impl Chunk {
 fn move_liquid(
     voxels: &mut Voxels,
     write: &mut Masks,
+    dst_to_src: &mut HashMap<usize, usize>,
     rm: u64,
     add: u64,
     src_i_2d: usize,
@@ -332,34 +333,38 @@ fn move_liquid(
 fn handle_collisions(
     voxels: &mut Voxels,
     write: &mut Masks,
+    dst_to_src: &mut HashMap<usize, usize>,
     mut collisions: u64,
-    [src_y, src_z]: [u32; 2],
-    [dst_y, dst_z]: [u32; 2],
-    x_shift: i32,
-    dst_to_src: &mut HashMap<UVec3, UVec3>,
+    src_i_2d: usize,
+    yz_i_3d: usize,
+    stride_3d: isize,
     tick: u64,
 ) {
     let state = FixedState::with_seed(tick);
 
     while collisions != 0 {
-        let x = collisions.trailing_zeros();
+        let x = collisions.trailing_zeros() as usize;
         collisions &= collisions - 1;
 
-        let dst_x = (x as i32 + x_shift) as u32;
-        let dst = uvec3(dst_x, dst_y, dst_z);
+        let src_i_3d = x | yz_i_3d;
+        let dst_i_3d = (src_i_3d as isize + stride_3d) as usize;
+        let other_src_i_3d = dst_to_src.get_mut(&dst_i_3d).unwrap();
 
-        let old_src = dst_to_src.get_mut(&dst).unwrap();
+        let other_priority = state.hash_one(*other_src_i_3d);
+        let priority = state.hash_one(src_i_3d);
 
-        let src = uvec3(x, src_y, src_z);
+        if priority >= other_priority {
+            let other_src_i_2d = *other_src_i_3d >> BITS;
+            let other_shift = *other_src_i_3d & ((1 << BITS) - 1);
+            write.some_mask[other_src_i_2d] |= 1 << other_shift;
+            write.liquid_mask[other_src_i_2d] |= 1 << other_shift;
+            write.some_mask[src_i_2d] &= !(1 << x);
+            write.liquid_mask[src_i_2d] &= !(1 << x);
 
-        let old_priority = state.hash_one(*old_src);
-        let priority = state.hash_one(src);
+            voxels[*other_src_i_3d] = voxels[src_i_3d];
+            voxels[src_i_3d] = None;
 
-        if priority >= old_priority {
-            copy_within(voxels, write, dst, *old_src);
-            copy_within(voxels, write, src, dst);
-            set(voxels, write, src, None);
-            *old_src = src;
+            *other_src_i_3d = src_i_3d;
         }
     }
 }

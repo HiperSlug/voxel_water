@@ -32,7 +32,7 @@ pub enum Voxel {
 pub struct Chunk {
     pub voxels: Voxels,
     pub masks: DoubleBuffered<Masks>,
-    dst_to_src: HashMap<UVec3, UVec3>,
+    dst_to_src: HashMap<usize, usize>,
     tick: u64,
 }
 
@@ -164,16 +164,16 @@ pub fn set(
     masks.set(p, v);
 }
 
-#[inline]
-pub fn copy_within(
-    voxels: &mut Voxels,
-    masks: &mut Masks,
-    src: impl Into<[u32; 3]> + Copy,
-    dst: impl Into<[u32; 3]> + Copy,
-) {
-    let dst_i = linearize_3d(dst);
-    let src_i = linearize_3d(src);
+// #[inline]
+// pub fn copy_within(
+//     voxels: &mut Voxels,
+//     masks: &mut Masks,
+//     src: impl Into<[u32; 3]> + Copy,
+//     dst: impl Into<[u32; 3]> + Copy,
+// ) {
+//     let dst_i = linearize_3d(dst);
+//     let src_i = linearize_3d(src);
 
-    voxels[dst_i] = voxels[src_i];
-    masks.copy_within(src, dst);
-}
+//     voxels[dst_i] = voxels[src_i];
+//     masks.copy_within(src, dst);
+// }

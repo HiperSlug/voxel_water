@@ -46,20 +46,12 @@ impl Masks {
         }
     }
 
-    pub fn copy_within(&mut self, src: impl Into<[u32; 3]>, dst: impl Into<[u32; 3]>) {
-        let (src_i, src_shift) = {
-            let [x, y, z] = src.into();
-            (linearize_2d([y, z]), x)
-        };
-        let (dst_i, dst_shift) = {
-            let [x, y, z] = dst.into();
-            (linearize_2d([y, z]), x)
-        };
-        self.some_mask[dst_i] &= !(1 << dst_shift);
-        self.liquid_mask[dst_i] &= !(1 << dst_shift);
+    pub fn copy_within(&mut self, src_i: usize, src_x: usize, dst_i: usize, dst_x: usize) {
+        self.some_mask[dst_i] &= !(1 << dst_x);
+        self.liquid_mask[dst_i] &= !(1 << dst_x);
 
-        self.some_mask[dst_i] |= ((self.some_mask[src_i] >> src_shift) & 1) << dst_shift;
-        self.liquid_mask[dst_i] |= ((self.liquid_mask[src_i] >> src_shift) & 1) << dst_shift;
+        self.some_mask[dst_i] |= ((self.some_mask[src_i] >> src_x) & 1) << dst_x;
+        self.liquid_mask[dst_i] |= ((self.liquid_mask[src_i] >> src_x) & 1) << dst_x;
     }
 
     pub fn fill_row(&mut self, p: impl Into<[u32; 2]>, v: Option<Voxel>) {
