@@ -82,10 +82,8 @@ impl<'a> FrontMut<'a> {
             let other_priority = state.hash_one(*other_src_i_3d);
 
             if priority >= other_priority {
-                // TODO: replace with `copy_from_within` function
-                // INVARIANT: Only `Some(Voxel::Liquid)` is marked as `liquid`
                 self.masks.set(*other_src_i_3d, Some(Voxel::Liquid));
-                self.masks.set((src_i_2d, x), None);
+                self.masks.set([src_i_2d, x], None);
 
                 self.voxels[*other_src_i_3d] = self.voxels[src_i_3d];
                 self.voxels[src_i_3d] = None;
@@ -99,12 +97,12 @@ impl<'a> FrontMut<'a> {
 impl Chunk {
     // TODO: cells can currently fall through corners
     pub fn liquid_tick(&mut self, tick: u64) {
-        let (mut front, read) = self.double_buffered_chunk.swap_sync_mut();
+        let (mut front, read) = self.db_chunk.swap_sync_mut();
         let dst_to_src = &mut self.dst_to_src;
 
         for z in 1..LEN_U32 - 1 {
             'row: for y in 1..LEN_U32 - 1 {
-                let i = [y, z].index_2d();
+                let i = [y, z].i_2d();
                 let yz_i_3d = i << BITS;
 
                 let mut liquid = read.liquid_mask[i] & !PAD_MASK;
@@ -298,13 +296,3 @@ fn shift<const S: isize>(n: u64) -> u64 {
 fn inv_shift<const S: isize>(n: u64) -> u64 {
     if S > 0 { n >> S } else { n << -S }
 }
-
-// #[inline(always)]
-// fn shift<const S: isize>(n: u64) -> u64 {
-//     if S > 0 { n >> S } else { n << -S }
-// }
-
-// #[inline(always)]
-// fn inv_shift<const S: isize>(n: u64) -> u64 {
-//     if S > 0 { n << S } else { n >> -S }
-// }

@@ -49,15 +49,15 @@ impl Mesher {
         }
     }
 
-    fn build_visible_masks(&mut self, chunk: &Chunk) {
-        let some_mask = &chunk.double_buffered_chunk.masks.front().some_mask;
+    fn build_visible_masks(&mut self, chunk: &DoubleBufferedChunk) {
+        let some_mask = &chunk.masks.front().some_mask;
 
         for face in Face::ALL {
             let visible_mask = &mut self.visible_masks[face];
 
             for z in 1..LEN_U32 - 1 {
                 for y in 1..LEN_U32 - 1 {
-                    let i = [y, z].index_2d();
+                    let i = [y, z].i_2d();
 
                     let some = some_mask[i];
                     let unpad_some = some & !PAD_MASK;
@@ -86,7 +86,7 @@ impl Mesher {
             let visible_mask = &mut self.visible_masks[face];
             for z in 1..LEN_U32 - 1 {
                 for y in 1..LEN_U32 - 1 {
-                    let i = [y, z].index_2d();
+                    let i = [y, z].i_2d();
 
                     let mut visible = visible_mask[i];
                     if visible == 0 {
@@ -103,9 +103,9 @@ impl Mesher {
                                 visible &= visible - 1;
 
                                 let upward_i = x as usize;
-                                let forward_i = [x, y].index_2d();
+                                let forward_i = [x, y].i_2d();
 
-                                let i = [x, y, z].index_3d();
+                                let i = [x, y, z].i_3d();
                                 let voxel_opt = chunk.voxels[i];
                                 let voxel = voxel_opt.unwrap();
 
@@ -161,9 +161,9 @@ impl Mesher {
                             while visible != 0 {
                                 let x = visible.trailing_zeros();
 
-                                let forward_i = [x, y].index_2d();
+                                let forward_i = [x, y].i_2d();
 
-                                let i = [x, y, z].index_3d();
+                                let i = [x, y, z].i_3d();
                                 let voxel_opt = chunk.voxels[i];
                                 let voxel = voxel_opt.unwrap();
 
@@ -227,7 +227,7 @@ impl Mesher {
 
                                 let upward_i = x as usize;
 
-                                let i = [x, y, z].index_3d();
+                                let i = [x, y, z].i_3d();
                                 let voxel_opt = chunk.voxels[i];
                                 let voxel = voxel_opt.unwrap();
 
@@ -292,8 +292,8 @@ impl Mesher {
     pub fn mesh(&mut self, chunk: &Chunk, chunk_pos: IVec3) -> &[Quad] {
         let origin = chunk_pos * LEN as i32;
         self.clear();
-        self.build_visible_masks(chunk);
-        self.face_merging(&chunk.double_buffered_chunk, origin);
+        self.build_visible_masks(&chunk.db_chunk);
+        self.face_merging(&chunk.db_chunk, origin);
         &self.quads
     }
 }

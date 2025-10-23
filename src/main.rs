@@ -156,7 +156,7 @@ fn input(
         println!("{:?}", chunk_quads[0]);
     }
 
-    let [last, dst] = chunk.raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
+    let [last, dst] = chunk.as_ref().raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
 
     let (selected_entity, mut selected_visibility) = selected_q.into_inner();
     let mut selected_transform = transforms.get_mut(selected_entity).unwrap();
