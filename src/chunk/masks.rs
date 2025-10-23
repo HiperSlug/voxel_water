@@ -9,6 +9,10 @@ pub type Shape2d = ConstPow2Shape2u32<BITS, BITS>;
 pub const STRIDE_Y_2D: usize = 1 << Shape2d::SHIFTS[0];
 pub const STRIDE_Z_2D: usize = 1 << Shape2d::SHIFTS[1];
 
+pub trait Index2d: Copy {
+    fn index_2d(self) -> usize;
+}
+
 #[derive(Clone)]
 pub struct Masks {
     pub some_mask: [u64; AREA],
@@ -25,10 +29,9 @@ impl Default for Masks {
 }
 
 impl Masks {
-    pub fn set(&mut self, p: impl Into<[u32; 3]>, v: Option<Voxel>) {
-        let [x, y, z] = p.into();
-        let i = linearize_2d([y, z]);
-        let mask = 1 << x;
+    pub fn set(&mut self, p: impl Index3d, v: Option<Voxel>) {
+        let (i, shift) = p.index_shift_2d();
+        let mask = 1 << shift;
 
         match v {
             Some(Voxel::Liquid) => {
@@ -46,16 +49,8 @@ impl Masks {
         }
     }
 
-    pub fn copy_within(&mut self, src_i: usize, src_x: usize, dst_i: usize, dst_x: usize) {
-        self.some_mask[dst_i] &= !(1 << dst_x);
-        self.liquid_mask[dst_i] &= !(1 << dst_x);
-
-        self.some_mask[dst_i] |= ((self.some_mask[src_i] >> src_x) & 1) << dst_x;
-        self.liquid_mask[dst_i] |= ((self.liquid_mask[src_i] >> src_x) & 1) << dst_x;
-    }
-
-    pub fn fill_row(&mut self, p: impl Into<[u32; 2]>, v: Option<Voxel>) {
-        let i = linearize_2d(p);
+    pub fn fill_row(&mut self, p: impl Index2d, v: Option<Voxel>) {
+        let i = p.index_2d();
 
         match v {
             Some(Voxel::Liquid) => {
@@ -73,8 +68,8 @@ impl Masks {
         }
     }
 
-    pub fn set_row_padding(&mut self, p: impl Into<[u32; 2]>, v: Option<Voxel>) {
-        let i = linearize_2d(p);
+    pub fn set_row_padding(&mut self, p: impl Index2d, v: Option<Voxel>) {
+        let i = p.index_2d();
 
         match v {
             Some(Voxel::Liquid) => {
@@ -92,20 +87,27 @@ impl Masks {
         }
     }
 
-    pub fn is_some(&self, p: impl Into<[u32; 3]>) -> bool {
-        let [x, y, z] = p.into();
-        let i = linearize_2d([y, z]);
+    pub fn is_some(&self, p: impl Index3d) -> bool {
+        let (i, shift) = p.index_shift_2d();
 
-        self.some_mask[i] & (1 << x) != 0
+        self.some_mask[i] & (1 << shift) != 0
     }
 }
 
-#[inline]
-pub fn linearize_2d(p: impl Into<[u32; 2]>) -> usize {
-    Shape2d::linearize(p.into()) as usize
+impl Index2d for usize {
+    fn index_2d(self) -> usize {
+        self
+    }
 }
 
-// #[inline]
-// pub fn delinearize_2d(i: usize) -> [u32; 2] {
-//     Shape2d::delinearize(i as u32)
-// }
+impl Index2d for [u32; 2] {
+    fn index_2d(self) -> usize {
+        Shape2d::linearize(self) as usize
+    }
+}
+
+impl Index2d for UVec2 {
+    fn index_2d(self) -> usize {
+        self.to_array().index_2d()
+    }
+}

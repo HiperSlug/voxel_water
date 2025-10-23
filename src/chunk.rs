@@ -9,6 +9,7 @@ use ndshape::{ConstPow2Shape3u32, ConstShape as _};
 pub use masks::*;
 
 pub const BITS: u32 = 6;
+
 pub const LEN: usize = 1 << BITS; // 64
 pub const LEN_U32: u32 = LEN as u32;
 pub const AREA: usize = LEN * LEN;
@@ -20,48 +21,77 @@ pub const STRIDE_X_3D: usize = 1 << Shape3d::SHIFTS[0];
 pub const STRIDE_Y_3D: usize = 1 << Shape3d::SHIFTS[1];
 pub const STRIDE_Z_3D: usize = 1 << Shape3d::SHIFTS[2];
 
+pub const MASK_X: usize = Shape3d::MASKS[0] as usize;
+
 pub type Voxels = [Option<Voxel>; VOL];
 
 // TODO: runtime enumeration/indexing
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Voxel {
     Liquid,
     Solid,
 }
 
-pub struct Chunk {
+pub struct DoubleBufferedChunk {
     pub voxels: Voxels,
     pub masks: DoubleBuffered<Masks>,
-    dst_to_src: HashMap<usize, usize>,
-    tick: u64,
 }
 
-impl Default for Chunk {
+impl Default for DoubleBufferedChunk {
     fn default() -> Self {
         Self {
             voxels: [None; VOL],
             masks: default(),
-            dst_to_src: default(),
-            tick: 0,
         }
     }
 }
 
-impl Chunk {
-    #[inline]
-    pub fn set(&mut self, p: impl Into<[u32; 3]> + Copy, v: Option<Voxel>) {
-        set(&mut self.voxels, &mut self.masks.front_mut(), p, v)
+impl DoubleBufferedChunk {
+    pub fn front_mut(&mut self) -> FrontMut {
+        FrontMut {
+            voxels: &mut self.voxels,
+            masks: self.masks.front_mut(),
+        }
+    }
+
+    pub fn swap_sync_mut(&mut self) -> (FrontMut, &mut Masks) {
+        let [front, back] = self.masks.swap_mut();
+        *front = back.clone();
+        (
+            FrontMut {
+                voxels: &mut self.voxels,
+                masks: front,
+            },
+            back,
+        )
+    }
+}
+
+#[derive(Default)]
+pub struct Chunk {
+    pub double_buffered_chunk: DoubleBufferedChunk,
+    pub dst_to_src: HashMap<usize, usize>,
+}
+
+pub struct FrontMut<'a> {
+    pub voxels: &'a mut Voxels,
+    pub masks: &'a mut Masks,
+}
+
+impl<'a> FrontMut<'a> {
+    pub fn set(&mut self, p: impl Index3d, v: Option<Voxel>) {
+        self.voxels[p.index_3d()] = v;
+        self.masks.set(p, v);
     }
 
     pub fn fill_padding(&mut self, v: Option<Voxel>) {
-        let masks = self.masks.front_mut();
-
         // +-Z
         for z in [0, LEN_U32 - 1] {
             for y in 0..LEN_U32 {
-                masks.fill_row([y, z], v);
+                self.masks.fill_row([y, z], v);
                 for x in 0..LEN_U32 {
-                    let i = linearize_3d([x, y, z]);
+                    let i = [x, y, z].index_3d();
                     self.voxels[i] = v;
                 }
             }
@@ -70,9 +100,9 @@ impl Chunk {
         // +-Y
         for z in 1..LEN_U32 - 1 {
             for y in [0, LEN_U32 - 1] {
-                masks.fill_row([y, z], v);
+                self.masks.fill_row([y, z], v);
                 for x in 0..LEN_U32 {
-                    let i = linearize_3d([x, y, z]);
+                    let i = [x, y, z].index_3d();
                     self.voxels[i] = v;
                 }
             }
@@ -81,9 +111,9 @@ impl Chunk {
         // +-X
         for z in 1..LEN_U32 - 1 {
             for y in 1..LEN_U32 - 1 {
-                masks.set_row_padding([y, z], v);
+                self.masks.set_row_padding([y, z], v);
                 for x in [0, LEN_U32 - 1] {
-                    let i = linearize_3d([x, y, z]);
+                    let i = [x, y, z].index_3d();
                     self.voxels[i] = v;
                 }
             }
@@ -91,8 +121,6 @@ impl Chunk {
     }
 
     pub fn raycast(&self, ray: Ray3d, max: f32) -> [Option<UVec3>; 2] {
-        let masks = self.masks.front();
-
         let origin = ray.origin.to_vec3a();
         let dir = ray.direction.to_vec3a();
 
@@ -113,7 +141,7 @@ impl Chunk {
             if in_unpad_bounds {
                 let pos = pos.as_uvec3();
 
-                if masks.is_some(pos) {
+                if self.masks.is_some(pos) {
                     return [last, Some(pos)];
                 }
 
@@ -141,39 +169,39 @@ impl Chunk {
     }
 }
 
-#[inline]
-pub fn linearize_3d(p: impl Into<[u32; 3]>) -> usize {
-    Shape3d::linearize(p.into()) as usize
+pub trait Index3d: Copy {
+    fn index_3d(self) -> usize;
+
+    fn index_shift_2d(self) -> (usize, usize);
 }
 
-// #[inline]
-// pub fn delinearize_3d(i: usize) -> [u32; 3] {
-//     Shape3d::delinearize(i as u32)
-// }
+impl Index3d for usize {
+    fn index_3d(self) -> usize {
+        self
+    }
 
-#[inline]
-pub fn set(
-    voxels: &mut Voxels,
-    masks: &mut Masks,
-    p: impl Into<[u32; 3]> + Copy,
-    v: Option<Voxel>,
-) {
-    let i = linearize_3d(p);
-    voxels[i] = v;
-
-    masks.set(p, v);
+    fn index_shift_2d(self) -> (usize, usize) {
+        (self >> BITS, self & MASK_X)
+    }
 }
 
-// #[inline]
-// pub fn copy_within(
-//     voxels: &mut Voxels,
-//     masks: &mut Masks,
-//     src: impl Into<[u32; 3]> + Copy,
-//     dst: impl Into<[u32; 3]> + Copy,
-// ) {
-//     let dst_i = linearize_3d(dst);
-//     let src_i = linearize_3d(src);
+impl Index3d for [u32; 3] {
+    fn index_3d(self) -> usize {
+        Shape3d::linearize(self) as usize
+    }
 
-//     voxels[dst_i] = voxels[src_i];
-//     masks.copy_within(src, dst);
-// }
+    fn index_shift_2d(self) -> (usize, usize) {
+        let [x, y, z] = self;
+        ([y, z].index_2d(), x as usize)
+    }
+}
+
+impl Index3d for UVec3 {
+    fn index_3d(self) -> usize {
+        self.to_array().index_3d()
+    }
+
+    fn index_shift_2d(self) -> (usize, usize) {
+        self.to_array().index_shift_2d()
+    }
+}
