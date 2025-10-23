@@ -5,8 +5,7 @@ use std::cell::RefCell;
 use super::*;
 
 use crate::chunk::{
-    AREA, Chunk, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D, STRIDE_Z_2D,
-    STRIDE_Z_3D, Voxel, linearize_2d, linearize_3d,
+    Chunk, DoubleBufferedChunk, Index2d, Index3d, Voxel, AREA, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D, STRIDE_Z_2D, STRIDE_Z_3D
 };
 
 const UPWARD_STRIDE_X: usize = STRIDE_X_3D;
@@ -51,14 +50,14 @@ impl Mesher {
     }
 
     fn build_visible_masks(&mut self, chunk: &Chunk) {
-        let some_mask = &chunk.masks.front().some_mask;
+        let some_mask = &chunk.double_buffered_chunk.masks.front().some_mask;
 
         for face in Face::ALL {
             let visible_mask = &mut self.visible_masks[face];
 
             for z in 1..LEN_U32 - 1 {
                 for y in 1..LEN_U32 - 1 {
-                    let i = linearize_2d([y, z]);
+                    let i = [y, z].index_2d();
 
                     let some = some_mask[i];
                     let unpad_some = some & !PAD_MASK;
@@ -82,12 +81,12 @@ impl Mesher {
         }
     }
 
-    fn face_merging(&mut self, chunk: &Chunk, origin: IVec3) {
+    fn face_merging(&mut self, chunk: &DoubleBufferedChunk, origin: IVec3) {
         for face in Face::ALL {
             let visible_mask = &mut self.visible_masks[face];
             for z in 1..LEN_U32 - 1 {
                 for y in 1..LEN_U32 - 1 {
-                    let i = linearize_2d([y, z]);
+                    let i = [y, z].index_2d();
 
                     let mut visible = visible_mask[i];
                     if visible == 0 {
@@ -104,9 +103,9 @@ impl Mesher {
                                 visible &= visible - 1;
 
                                 let upward_i = x as usize;
-                                let forward_i = linearize_2d([x, y]);
+                                let forward_i = [x, y].index_2d();
 
-                                let i = linearize_3d([x, y, z]);
+                                let i = [x, y, z].index_3d();
                                 let voxel_opt = chunk.voxels[i];
                                 let voxel = voxel_opt.unwrap();
 
@@ -162,9 +161,9 @@ impl Mesher {
                             while visible != 0 {
                                 let x = visible.trailing_zeros();
 
-                                let forward_i = linearize_2d([x, y]);
+                                let forward_i = [x, y].index_2d();
 
-                                let i = linearize_3d([x, y, z]);
+                                let i = [x, y, z].index_3d();
                                 let voxel_opt = chunk.voxels[i];
                                 let voxel = voxel_opt.unwrap();
 
@@ -228,7 +227,7 @@ impl Mesher {
 
                                 let upward_i = x as usize;
 
-                                let i = linearize_3d([x, y, z]);
+                                let i = [x, y, z].index_3d();
                                 let voxel_opt = chunk.voxels[i];
                                 let voxel = voxel_opt.unwrap();
 
@@ -294,7 +293,7 @@ impl Mesher {
         let origin = chunk_pos * LEN as i32;
         self.clear();
         self.build_visible_masks(chunk);
-        self.face_merging(chunk, origin);
+        self.face_merging(&chunk.double_buffered_chunk, origin);
         &self.quads
     }
 }

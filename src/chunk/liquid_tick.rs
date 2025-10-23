@@ -4,6 +4,9 @@ use std::hash::BuildHasher;
 
 use super::*;
 
+const I_STRIDE_Y_2D: isize = STRIDE_Y_2D as isize;
+const I_STRIDE_Z_2D: isize = STRIDE_Z_2D as isize;
+
 const I_STRIDE_X_3D: isize = STRIDE_X_3D as isize;
 const I_STRIDE_Y_3D: isize = STRIDE_Y_3D as isize;
 const I_STRIDE_Z_3D: isize = STRIDE_Z_3D as isize;
@@ -19,21 +22,90 @@ enum Dir {
     NegZ,
 }
 
+impl<'a> FrontMut<'a> {
+    #[inline(always)]
+    fn try_move_row<const X: isize, const Y: isize, const Z: isize>(
+        &mut self,
+        dst_to_src: &mut HashMap<usize, usize>,
+        try_move: u64,
+        src_i_2d: usize,
+        yz_i_3d: usize,
+        tick: u64,
+    ) {
+        let state = FixedState::with_seed(tick);
+
+        let delta_2d = Y * I_STRIDE_Y_2D + Z * I_STRIDE_Z_2D;
+        let dst_i_2d = src_i_2d.wrapping_add_signed(delta_2d);
+
+        let dst_some = inv_shift::<X>(self.masks.some_mask[dst_i_2d]);
+
+        let mut success = try_move & !dst_some;
+        let mut failure = try_move & !success;
+
+        if success != 0 {
+            let keep_mask = !success;
+            let add_mask = shift::<X>(success);
+
+            // INVARIANT: Only voxels marked `some` && `liquid` are ever moved with this function.
+            self.masks.some_mask[dst_i_2d] |= add_mask;
+            self.masks.liquid_mask[dst_i_2d] |= add_mask;
+
+            self.masks.some_mask[src_i_2d] &= keep_mask;
+            self.masks.liquid_mask[src_i_2d] &= keep_mask;
+        }
+
+        while success != 0 {
+            let x = success.trailing_zeros() as usize;
+            success &= success - 1;
+
+            let src_i_3d = yz_i_3d | x;
+            let delta_3d = X * I_STRIDE_X_3D + Y * I_STRIDE_Y_3D + Z * I_STRIDE_Z_3D;
+            let dst_i_3d = src_i_3d.wrapping_add_signed(delta_3d);
+
+            self.voxels[dst_i_3d] = self.voxels[src_i_3d];
+            self.voxels[src_i_3d] = None;
+
+            dst_to_src.insert(dst_i_3d, src_i_3d);
+        }
+
+        while failure != 0 {
+            let x = failure.trailing_zeros() as usize;
+            failure &= failure - 1;
+
+            let src_i_3d = yz_i_3d | x;
+            let delta_3d = X * I_STRIDE_X_3D + Y * I_STRIDE_Y_3D + Z * I_STRIDE_Z_3D;
+            let dst_i_3d = src_i_3d.wrapping_add_signed(delta_3d);
+
+            let other_src_i_3d = dst_to_src.get_mut(&dst_i_3d).unwrap();
+
+            let priority = state.hash_one(src_i_3d);
+            let other_priority = state.hash_one(*other_src_i_3d);
+
+            if priority >= other_priority {
+                // TODO: replace with `copy_from_within` function
+                // INVARIANT: Only `Some(Voxel::Liquid)` is marked as `liquid`
+                self.masks.set(*other_src_i_3d, Some(Voxel::Liquid));
+                self.masks.set((src_i_2d, x), None);
+
+                self.voxels[*other_src_i_3d] = self.voxels[src_i_3d];
+                self.voxels[src_i_3d] = None;
+
+                *other_src_i_3d = src_i_3d;
+            }
+        }
+    }
+}
+
 impl Chunk {
     // TODO: cells can currently fall through corners
-    pub fn liquid_tick(&mut self) {
-        let [read, write] = self.masks.swap_mut();
-        *write = read.clone();
-
-        let voxels = &mut self.voxels;
+    pub fn liquid_tick(&mut self, tick: u64) {
+        let (mut front, read) = self.double_buffered_chunk.swap_sync_mut();
         let dst_to_src = &mut self.dst_to_src;
-        let tick = self.tick;
-        self.tick = tick + 1;
 
         for z in 1..LEN_U32 - 1 {
             'row: for y in 1..LEN_U32 - 1 {
-                let i = linearize_2d([y, z]);
-                let yz_i_3d = linearize_3d([0, y, z]);
+                let i = [y, z].index_2d();
+                let yz_i_3d = i << BITS;
 
                 let mut liquid = read.liquid_mask[i] & !PAD_MASK;
 
@@ -45,34 +117,11 @@ impl Chunk {
 
                 // down
                 {
-                    let fall = liquid & !read.some_mask[ny_i];
-                    let success = fall & !write.some_mask[ny_i];
-                    let collisions = fall & write.some_mask[ny_i];
+                    let try_move = liquid & !read.some_mask[ny_i];
 
-                    move_liquid(
-                        voxels,
-                        write,
-                        dst_to_src,
-                        success,
-                        success,
-                        i,
-                        ny_i,
-                        yz_i_3d,
-                        -I_STRIDE_Y_3D,
-                    );
+                    front.try_move_row::<0, -1, 0>(dst_to_src, try_move, i, yz_i_3d, tick);
 
-                    handle_collisions(
-                        voxels,
-                        write,
-                        dst_to_src,
-                        collisions,
-                        i,
-                        yz_i_3d,
-                        -I_STRIDE_Y_3D,
-                        tick,
-                    );
-
-                    liquid &= !fall;
+                    liquid &= !try_move;
 
                     if liquid == 0 {
                         continue 'row;
@@ -96,58 +145,41 @@ impl Chunk {
                 // down-adjacent
                 for j in 0..4 {
                     for k in 0..4 {
-                        let dir = DIRS[k];
-                        let group_mask = group_masks[(j + k) % 4];
-
-                        let group = liquid & group_mask;
+                        let group = liquid & group_masks[(j + k) % 4];
                         if group == 0 {
                             continue;
                         }
 
-                        let (rm, add, src_i_2d, dst_i_2d, stride_3d, collisions) = match dir {
+                        match DIRS[k] {
                             PosX => {
-                                let fall = (group << 1) & !read.some_mask[ny_i];
-                                let success = fall & !write.some_mask[ny_i];
-                                let failure = fall & write.some_mask[ny_i];
-
-                                const S: isize = I_STRIDE_X_3D - I_STRIDE_Y_3D;
-                                (success >> 1, success, i, ny_i, S, failure)
+                                let try_move = group & inv_shift::<1>(!read.some_mask[ny_i]);
+                                liquid &= !try_move;
+                                front.try_move_row::<1, -1, 0>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                             NegX => {
-                                let fall = (group >> 1) & !read.some_mask[ny_i];
-                                let success = fall & !write.some_mask[ny_i];
-                                let failure = fall & write.some_mask[ny_i];
-
-                                const S: isize = -I_STRIDE_X_3D - I_STRIDE_Y_3D;
-                                (success << 1, success, i, ny_i, S, failure)
+                                let try_move = group & inv_shift::<-1>(!read.some_mask[ny_i]);
+                                liquid &= !try_move;
+                                front.try_move_row::<-1, -1, 0>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                             PosZ => {
-                                let fall = group & !read.some_mask[ny_pz_i];
-                                let success = fall & !write.some_mask[ny_pz_i];
-                                let failure = fall & write.some_mask[ny_pz_i];
-
-                                const S: isize = -I_STRIDE_Y_3D + I_STRIDE_Z_3D;
-                                (success, success, i, ny_pz_i, S, failure)
+                                let try_move = group & !read.some_mask[ny_pz_i];
+                                liquid &= !try_move;
+                                front.try_move_row::<0, -1, 1>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                             NegZ => {
-                                let fall = group & !read.some_mask[ny_nz_i];
-                                let success = fall & !write.some_mask[ny_nz_i];
-                                let failure = fall & write.some_mask[ny_nz_i];
-
-                                const S: isize = -I_STRIDE_Y_3D - I_STRIDE_Z_3D;
-                                (success, success, i, ny_nz_i, S, failure)
+                                let try_move = group & !read.some_mask[ny_nz_i];
+                                liquid &= !try_move;
+                                front.try_move_row::<0, -1, -1>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                         };
-
-                        move_liquid(
-                            voxels, write, dst_to_src, rm, add, src_i_2d, dst_i_2d, yz_i_3d,
-                            stride_3d,
-                        );
-
-                        handle_collisions(
-                            voxels, write, dst_to_src, collisions, src_i_2d, yz_i_3d, stride_3d,
-                            tick,
-                        );
 
                         if liquid == 0 {
                             continue 'row;
@@ -158,58 +190,41 @@ impl Chunk {
                 // down-diagonal
                 for j in 0..4 {
                     for k in 0..4 {
-                        let dir = DIRS[k];
-                        let group_mask = group_masks[(j + k) % 4];
-
-                        let group = liquid & group_mask;
+                        let group = liquid & group_masks[(j + k) % 4];
                         if group == 0 {
                             continue;
                         }
 
-                        let (rm, add, src_i_2d, dst_i_2d, stride_3d, collisions) = match dir {
+                        match DIRS[k] {
                             PosX => {
-                                let fall = (group << 1) & !read.some_mask[ny_nz_i];
-                                let success = fall & !write.some_mask[ny_nz_i];
-                                let failure = fall & write.some_mask[ny_nz_i];
-
-                                const S: isize = I_STRIDE_X_3D - I_STRIDE_Y_3D - I_STRIDE_Z_3D;
-                                (success >> 1, success, i, ny_nz_i, S, failure)
+                                let try_move = group & inv_shift::<1>(!read.some_mask[ny_nz_i]);
+                                liquid &= !try_move;
+                                front.try_move_row::<1, -1, -1>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                             NegX => {
-                                let fall = (group >> 1) & !read.some_mask[ny_pz_i];
-                                let success = fall & !write.some_mask[ny_pz_i];
-                                let failure = fall & write.some_mask[ny_pz_i];
-
-                                const S: isize = -I_STRIDE_X_3D - I_STRIDE_Y_3D + I_STRIDE_Z_3D;
-                                (success << 1, success, i, ny_pz_i, S, failure)
+                                let try_move = group & inv_shift::<-1>(!read.some_mask[ny_pz_i]);
+                                liquid &= !try_move;
+                                front.try_move_row::<-1, -1, 1>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                             PosZ => {
-                                let fall = (group << 1) & !read.some_mask[ny_pz_i];
-                                let success = fall & !write.some_mask[ny_pz_i];
-                                let failure = fall & write.some_mask[ny_pz_i];
-
-                                const S: isize = I_STRIDE_X_3D - I_STRIDE_Y_3D + I_STRIDE_Z_3D;
-                                (success >> 1, success, i, ny_pz_i, S, failure)
+                                let try_move = group & inv_shift::<1>(!read.some_mask[ny_pz_i]);
+                                liquid &= !try_move;
+                                front.try_move_row::<1, -1, 1>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                             NegZ => {
-                                let fall = (group >> 1) & !read.some_mask[ny_nz_i];
-                                let success = fall & !write.some_mask[ny_nz_i];
-                                let failure = fall & write.some_mask[ny_nz_i];
-
-                                const S: isize = -I_STRIDE_X_3D - I_STRIDE_Y_3D - I_STRIDE_Z_3D;
-                                (success << 1, success, i, ny_nz_i, S, failure)
+                                let try_move = group & inv_shift::<-1>(!read.some_mask[ny_nz_i]);
+                                liquid &= !try_move;
+                                front.try_move_row::<-1, -1, -1>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                         };
-
-                        move_liquid(
-                            voxels, write, dst_to_src, rm, add, src_i_2d, dst_i_2d, yz_i_3d,
-                            stride_3d,
-                        );
-
-                        handle_collisions(
-                            voxels, write, dst_to_src, collisions, src_i_2d, yz_i_3d, stride_3d,
-                            tick,
-                        );
 
                         if liquid == 0 {
                             continue 'row;
@@ -223,60 +238,45 @@ impl Chunk {
                 // adjacent
                 for j in 0..4 {
                     for k in 0..4 {
-                        let dir = DIRS[k];
-                        let group_mask = group_masks[(j + k) % 4];
-
-                        let group = liquid & group_mask;
+                        let group = liquid & group_masks[(j + k) % 4];
                         if group == 0 {
                             continue;
                         }
 
-                        let (rm, add, src_i_2d, dst_i_2d, stride_3d, collisions) = match dir {
+                        match DIRS[k] {
                             PosX => {
-                                let slide =
-                                    group & !(read.some_mask[i] >> 1) & (read.some_mask[i] << 1);
-                                let success = slide & !(write.some_mask[i] >> 1);
-                                let failure = slide & (write.some_mask[i] >> 1);
-
-                                const S: isize = I_STRIDE_X_3D;
-                                (success, success << 1, i, i, S, failure)
+                                let try_move = group
+                                    & inv_shift::<1>(!read.some_mask[i])
+                                    & shift::<1>(read.some_mask[i]);
+                                    liquid &= !try_move;
+                                front.try_move_row::<1, 0, 0>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                             NegX => {
-                                let slide =
-                                    group & !(read.some_mask[i] << 1) & (read.some_mask[i] >> 1);
-                                let success = slide & !(write.some_mask[i] << 1);
-                                let failure = slide & (write.some_mask[i] << 1);
-
-                                const S: isize = -I_STRIDE_X_3D;
-                                (success, success >> 1, i, i, S, failure)
+                                let try_move = group
+                                    & inv_shift::<-1>(!read.some_mask[i])
+                                    & shift::<-1>(read.some_mask[i]);
+                                    liquid &= !try_move;
+                                front.try_move_row::<-1, 0, 0>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                             PosZ => {
-                                let slide = group & !read.some_mask[pz_i] & read.some_mask[nz_i];
-                                let success = slide & !write.some_mask[pz_i];
-                                let failure = slide & write.some_mask[pz_i];
-
-                                const S: isize = I_STRIDE_Z_3D;
-                                (success, success, i, pz_i, S, failure)
+                                let try_move = group & !read.some_mask[pz_i] & read.some_mask[nz_i];
+                                liquid &= !try_move;
+                                front.try_move_row::<0, 0, 1>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                             NegZ => {
-                                let slide = group & !read.some_mask[nz_i] & read.some_mask[pz_i];
-                                let success = slide & !write.some_mask[nz_i];
-                                let failure = slide & write.some_mask[nz_i];
-
-                                const S: isize = -I_STRIDE_Z_3D;
-                                (success, success, i, nz_i, S, failure)
+                                let try_move = group & !read.some_mask[nz_i] & read.some_mask[pz_i];
+                                liquid &= !try_move;
+                                front.try_move_row::<0, 0, -1>(
+                                    dst_to_src, try_move, i, yz_i_3d, tick,
+                                );
                             }
                         };
-
-                        move_liquid(
-                            voxels, write, dst_to_src, rm, add, src_i_2d, dst_i_2d, yz_i_3d,
-                            stride_3d,
-                        );
-
-                        handle_collisions(
-                            voxels, write, dst_to_src, collisions, src_i_2d, yz_i_3d, stride_3d,
-                            tick,
-                        );
 
                         if liquid == 0 {
                             continue 'row;
@@ -289,81 +289,22 @@ impl Chunk {
     }
 }
 
-#[inline]
-fn move_liquid(
-    voxels: &mut Voxels,
-    write: &mut Masks,
-    dst_to_src: &mut HashMap<usize, usize>,
-    rm: u64,
-    add: u64,
-    src_i_2d: usize,
-    dst_i_2d: usize,
-    yz_i_3d: usize,
-    stride_3d: isize,
-) {
-    if rm == 0 {
-        return;
-    }
-
-    // masks
-    write.some_mask[src_i_2d] &= !rm;
-    write.liquid_mask[src_i_2d] &= !rm;
-
-    write.some_mask[dst_i_2d] |= add;
-    write.liquid_mask[dst_i_2d] |= add;
-
-    // voxels
-    let mut moved = rm;
-    while moved != 0 {
-        let x = moved.trailing_zeros() as usize;
-        moved &= moved - 1;
-
-        let src_i_3d = yz_i_3d | x;
-        let dst_i_3d = src_i_3d.wrapping_add_signed(stride_3d);
-
-        voxels[dst_i_3d] = voxels[src_i_3d];
-        voxels[src_i_3d] = None;
-
-        dst_to_src.insert(dst_i_3d, src_i_3d);
-    }
+#[inline(always)]
+fn shift<const S: isize>(n: u64) -> u64 {
+    if S > 0 { n << S } else { n >> -S }
 }
 
-#[inline]
-fn handle_collisions(
-    voxels: &mut Voxels,
-    write: &mut Masks,
-    dst_to_src: &mut HashMap<usize, usize>,
-    mut collisions: u64,
-    src_i_2d: usize,
-    yz_i_3d: usize,
-    stride_3d: isize,
-    tick: u64,
-) {
-    let state = FixedState::with_seed(tick);
-
-    while collisions != 0 {
-        let x = collisions.trailing_zeros() as usize;
-        collisions &= collisions - 1;
-
-        let src_i_3d = x | yz_i_3d;
-        let dst_i_3d = (src_i_3d as isize + stride_3d) as usize;
-        let other_src_i_3d = dst_to_src.get_mut(&dst_i_3d).unwrap();
-
-        let other_priority = state.hash_one(*other_src_i_3d);
-        let priority = state.hash_one(src_i_3d);
-
-        if priority >= other_priority {
-            let other_src_i_2d = *other_src_i_3d >> BITS;
-            let other_shift = *other_src_i_3d & ((1 << BITS) - 1);
-            write.some_mask[other_src_i_2d] |= 1 << other_shift;
-            write.liquid_mask[other_src_i_2d] |= 1 << other_shift;
-            write.some_mask[src_i_2d] &= !(1 << x);
-            write.liquid_mask[src_i_2d] &= !(1 << x);
-
-            voxels[*other_src_i_3d] = voxels[src_i_3d];
-            voxels[src_i_3d] = None;
-
-            *other_src_i_3d = src_i_3d;
-        }
-    }
+#[inline(always)]
+fn inv_shift<const S: isize>(n: u64) -> u64 {
+    if S > 0 { n >> S } else { n << -S }
 }
+
+// #[inline(always)]
+// fn shift<const S: isize>(n: u64) -> u64 {
+//     if S > 0 { n >> S } else { n << -S }
+// }
+
+// #[inline(always)]
+// fn inv_shift<const S: isize>(n: u64) -> u64 {
+//     if S > 0 { n << S } else { n >> -S }
+// }

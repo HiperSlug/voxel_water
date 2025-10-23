@@ -48,28 +48,30 @@ impl Default for DoubleBufferedChunk {
 }
 
 impl DoubleBufferedChunk {
-    pub fn front_mut(&mut self) -> FrontMut {
+    pub fn front_mut(&mut self) -> FrontMut<'_> {
         FrontMut {
             voxels: &mut self.voxels,
             masks: self.masks.front_mut(),
         }
     }
 
-    pub fn swap_sync_mut(&mut self) -> (FrontMut, &mut Masks) {
+    pub fn swap_sync_mut(&mut self) -> (FrontMut<'_>, &mut Masks) {
         let [front, back] = self.masks.swap_mut();
-        *front = back.clone();
+        // TODO: avoid cloning with change collection and double writes
+        *back = front.clone();
         (
             FrontMut {
                 voxels: &mut self.voxels,
-                masks: front,
+                masks: back,
             },
-            back,
+            front,
         )
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Deref, DerefMut)]
 pub struct Chunk {
+    #[deref]
     pub double_buffered_chunk: DoubleBufferedChunk,
     pub dst_to_src: HashMap<usize, usize>,
 }
@@ -182,6 +184,17 @@ impl Index3d for usize {
 
     fn index_shift_2d(self) -> (usize, usize) {
         (self >> BITS, self & MASK_X)
+    }
+}
+
+impl Index3d for (usize, usize) {
+    fn index_3d(self) -> usize {
+        let (index_2d, x_shift) = self;
+        (index_2d << BITS) & x_shift
+    }
+
+    fn index_shift_2d(self) -> (usize, usize) {
+        self
     }
 }
 

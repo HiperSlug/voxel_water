@@ -103,7 +103,7 @@ fn setup(
             vec![Color::WHITE.to_srgba().to_vec4(); 4],
         );
     let mut chunk = BoxChunk::default();
-    chunk.fill_padding(Some(Voxel::Solid));
+    chunk.front_mut().fill_padding(Some(Voxel::Solid));
     commands.spawn((
         Mesh3d(meshes.add(quad)),
         chunk,
@@ -119,8 +119,9 @@ fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
     skybox.rotation *= Quat::from_rotation_y(delta);
 }
 
-fn liquid_tick(mut chunk: Single<&mut BoxChunk>) {
-    chunk.liquid_tick();
+fn liquid_tick(mut chunk: Single<&mut BoxChunk>, mut tick: Local<u64>) {
+    chunk.liquid_tick(*tick);
+    *tick += 1;
 }
 
 fn render_chunk(chunk: Single<(&mut BoxChunk, &mut ChunkQuads)>) {
@@ -148,6 +149,8 @@ fn input(
     chunk_quads: Single<&ChunkQuads>,
 ) {
     let transform = transforms.get(*player_q).unwrap();
+
+    let mut chunk = chunk.front_mut();
 
     if mb.just_pressed(MouseButton::Back) {
         println!("{:?}", chunk_quads[0]);
