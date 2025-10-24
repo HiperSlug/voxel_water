@@ -1,11 +1,12 @@
-use bevy::prelude::*;
+use bevy::{platform::collections::HashSet, prelude::*};
 use enum_map::{EnumMap, enum_map};
 use std::cell::RefCell;
 
 use super::*;
 
 use crate::chunk::{
-    Chunk, DoubleBufferedChunk, Index2d, Index3d, Voxel, AREA, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D, STRIDE_Z_2D, STRIDE_Z_3D
+    AREA, Front, Index2d, Index3d, LEN, LEN_U32, PAD_MASK, STRIDE_X_3D, STRIDE_Y_2D, STRIDE_Y_3D,
+    STRIDE_Z_2D, STRIDE_Z_3D, Voxel,
 };
 
 const UPWARD_STRIDE_X: usize = STRIDE_X_3D;
@@ -17,11 +18,9 @@ thread_local! {
 }
 
 // TODO: iterative meshing
-// TODO: remove scratch `quads`
 // TODO: transparency
 #[derive(Debug)]
 pub struct Mesher {
-    quads: Vec<Quad>,
     visible_masks: Box<EnumMap<Face, [u64; AREA]>>,
     upward_merged: Box<[u8; LEN]>,
     forward_merged: Box<[u8; AREA]>,
@@ -30,7 +29,6 @@ pub struct Mesher {
 impl Default for Mesher {
     fn default() -> Self {
         Self {
-            quads: Vec::new(),
             visible_masks: Box::new(enum_map! { _ => [0; AREA] }),
             upward_merged: Box::new([0; LEN]),
             forward_merged: Box::new([0; AREA]),
@@ -41,7 +39,6 @@ impl Default for Mesher {
 impl Mesher {
     // TODO: determine nececcity, after transparency
     fn clear(&mut self) {
-        self.quads.clear();
         self.upward_merged.fill(0);
         self.forward_merged.fill(0);
         for (_, arr) in &mut *self.visible_masks {
@@ -49,12 +46,10 @@ impl Mesher {
         }
     }
 
-    fn build_visible_masks(&mut self, chunk: &DoubleBufferedChunk) {
-        let some_mask = &chunk.masks.front().some_mask;
+    fn build_visible_masks(&mut self, chunk: Front) {
+        let some_mask = &chunk.masks.some_mask;
 
-        for face in Face::ALL {
-            let visible_mask = &mut self.visible_masks[face];
-
+        for (face, visible_mask) in &mut *self.visible_masks {
             for z in 1..LEN_U32 - 1 {
                 for y in 1..LEN_U32 - 1 {
                     let i = [y, z].i_2d();
@@ -81,8 +76,9 @@ impl Mesher {
         }
     }
 
-    fn face_merging(&mut self, chunk: &DoubleBufferedChunk, origin: IVec3) {
-        for face in Face::ALL {
+    fn face_merging(&mut self, chunk: Front, origin: IVec3) -> EnumMap<Face, Vec<Quad>> {
+        let mut map = EnumMap::<Face, Vec<_>>::default();
+        for (face, quads) in &mut map {
             let visible_mask = &mut self.visible_masks[face];
             for z in 1..LEN_U32 - 1 {
                 for y in 1..LEN_U32 - 1 {
@@ -130,7 +126,7 @@ impl Mesher {
                                 }
 
                                 // finish
-                                self.quads.push({
+                                quads.push({
                                     let forward_merged = self.forward_merged[forward_i] as u32;
                                     let upward_merged = self.upward_merged[upward_i] as u32;
 
@@ -198,7 +194,7 @@ impl Mesher {
                                 visible &= !((1 << cleared) - 1);
 
                                 // finish
-                                self.quads.push({
+                                quads.push({
                                     let forward_merged = self.forward_merged[forward_i] as u32;
 
                                     let w = right_merged;
@@ -262,7 +258,7 @@ impl Mesher {
                                 visible &= !((1 << cleared) - 1);
 
                                 // finish
-                                self.quads.push({
+                                quads.push({
                                     let upward_merged = self.upward_merged[upward_i] as u32;
 
                                     let w = right_merged;
@@ -287,13 +283,22 @@ impl Mesher {
                 }
             }
         }
+        map
     }
 
-    pub fn mesh(&mut self, chunk: &Chunk, chunk_pos: IVec3) -> &[Quad] {
+    pub fn mesh(&mut self, chunk: Front, chunk_pos: IVec3) -> EnumMap<Face, Vec<Quad>> {
         let origin = chunk_pos * LEN as i32;
         self.clear();
-        self.build_visible_masks(&chunk.db_chunk);
-        self.face_merging(&chunk.db_chunk, origin);
-        &self.quads
+        self.build_visible_masks(chunk);
+        self.face_merging(chunk, origin)
+    }
+
+    pub fn remesh(
+        &mut self,
+        chunk: Front,
+        chunk_pos: IVec3,
+        quads: &mut EnumMap<Face, Vec<Quad>>,
+        remesh: HashSet<(Face, i32)>,
+    ) {
     }
 }
