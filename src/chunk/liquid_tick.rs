@@ -246,7 +246,7 @@ impl Chunk {
                                 let try_move = group
                                     & inv_shift::<1>(!read.some_mask[i])
                                     & shift::<1>(read.some_mask[i]);
-                                    liquid &= !try_move;
+                                liquid &= !try_move;
                                 front.try_move_row::<1, 0, 0>(
                                     dst_to_src, try_move, i, yz_i_3d, tick,
                                 );
@@ -255,7 +255,7 @@ impl Chunk {
                                 let try_move = group
                                     & inv_shift::<-1>(!read.some_mask[i])
                                     & shift::<-1>(read.some_mask[i]);
-                                    liquid &= !try_move;
+                                liquid &= !try_move;
                                 front.try_move_row::<-1, 0, 0>(
                                     dst_to_src, try_move, i, yz_i_3d, tick,
                                 );

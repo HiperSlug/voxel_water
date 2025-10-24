@@ -1,7 +1,7 @@
 mod double_buffered;
+pub mod index;
 mod liquid_tick;
 mod masks;
-mod index;
 
 use bevy::{platform::collections::HashMap, prelude::*};
 use double_buffered::DoubleBuffered;
@@ -47,7 +47,7 @@ impl DoubleBufferedChunk {
             masks: self.masks.front(),
         }
     }
-    
+
     pub fn front_mut(&mut self) -> FrontMut<'_> {
         FrontMut {
             voxels: &mut self.voxels,
@@ -74,6 +74,7 @@ pub struct FrontMut<'a> {
     pub masks: &'a mut Masks,
 }
 
+#[derive(Clone, Copy)]
 pub struct Front<'a> {
     pub voxels: &'a Voxels,
     pub masks: &'a Masks,

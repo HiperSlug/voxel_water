@@ -128,9 +128,12 @@ fn render_chunk(chunk: Single<(&mut BoxChunk, &mut ChunkQuads)>) {
     MESHER.with_borrow_mut(|mesher| {
         let (chunk, mut chunk_quads) = chunk.into_inner();
 
-        let quads = mesher.mesh(&chunk, IVec3::ZERO);
+        let quads = mesher.mesh(chunk.front(), IVec3::ZERO);
 
-        **chunk_quads = quads.to_vec();
+        chunk_quads.clear();
+        for quads in quads.values() {
+            chunk_quads.extend(quads);
+        }
     })
 }
 
@@ -156,7 +159,9 @@ fn input(
         println!("{:?}", chunk_quads[0]);
     }
 
-    let [last, dst] = chunk.as_ref().raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
+    let [last, dst] = chunk
+        .as_ref()
+        .raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
 
     let (selected_entity, mut selected_visibility) = selected_q.into_inner();
     let mut selected_transform = transforms.get_mut(selected_entity).unwrap();
