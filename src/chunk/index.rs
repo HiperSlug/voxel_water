@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use ndshape::{ConstPow2Shape3u32, ConstPow2Shape2u32, ConstShape as _};
+use ndshape::{ConstPow2Shape2u32, ConstPow2Shape3u32, ConstShape as _};
 
 use super::*;
 
@@ -20,18 +20,21 @@ pub trait Index2d {
 }
 
 impl Index2d for usize {
+    #[inline]
     fn i_2d(&self) -> usize {
         *self
     }
 }
 
 impl Index2d for [u32; 2] {
+    #[inline]
     fn i_2d(&self) -> usize {
         Shape2d::linearize(*self) as usize
     }
 }
 
 impl Index2d for UVec2 {
+    #[inline]
     fn i_2d(&self) -> usize {
         self.to_array().i_2d()
     }
@@ -44,31 +47,37 @@ pub trait Index3d {
 }
 
 impl Index3d for usize {
+    #[inline]
     fn i_3d(&self) -> usize {
         *self
     }
 
+    #[inline]
     fn i_2d_and_shift(&self) -> [usize; 2] {
         [*self >> BITS, *self & MASK_X]
     }
 }
 
 impl Index3d for [usize; 2] {
+    #[inline]
     fn i_3d(&self) -> usize {
         let [i_2d, shift] = *self;
         (i_2d << BITS) | shift
     }
 
+    #[inline]
     fn i_2d_and_shift(&self) -> [usize; 2] {
         *self
     }
 }
 
 impl Index3d for [u32; 3] {
+    #[inline]
     fn i_3d(&self) -> usize {
         Shape3d::linearize(*self) as usize
     }
 
+    #[inline]
     fn i_2d_and_shift(&self) -> [usize; 2] {
         let [x, y, z] = *self;
         [[y, z].i_2d(), x as usize]
@@ -76,10 +85,12 @@ impl Index3d for [u32; 3] {
 }
 
 impl Index3d for UVec3 {
+    #[inline]
     fn i_3d(&self) -> usize {
         self.to_array().i_3d()
     }
 
+    #[inline]
     fn i_2d_and_shift(&self) -> [usize; 2] {
         self.to_array().i_2d_and_shift()
     }
