@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{platform::collections::HashSet, prelude::*};
 use enum_map::{EnumMap, enum_map};
 use std::{cell::RefCell, ops::Range};
 
@@ -370,6 +370,172 @@ impl Mesher {
         quads.splice(range, self.scratch.drain(..));
     }
 
+    fn remesh_y(
+        &mut self,
+        chunk: Front,
+        origin: IVec3,
+        y: u32,
+        quads: &mut EnumMap<Face, Vec<Quad>>,
+        f: Face,
+    ) {
+        let visible_mask = &mut self.visible_masks[f];
+        let quads = &mut quads[f];
+
+        for z in 1..LEN_U32 - 1 {
+            let i_2d = [y, z].i_2d();
+
+            let mut visible = visible_mask[i_2d];
+            let forward_visible = visible_mask[i_2d + STRIDE_Z_2D];
+
+            while visible != 0 {
+                let x = visible.trailing_zeros();
+
+                let forward_i = x as usize; // figure out of OG was just using y for no reason
+
+                let i_3d = [i_2d, x as usize].i_3d();
+                let voxel_opt = chunk.voxels[i_3d];
+                let voxel = voxel_opt.unwrap();
+
+                // forward merging
+                if (forward_visible >> x) & 1 != 0
+                    && voxel_opt == chunk.voxels[i_3d + STRIDE_Y_3D]
+                {
+                    self.forward_merged[forward_i] += 1;
+                    visible &= visible - 1;
+                    continue;
+                }
+
+                // rightward merging
+                let mut right_merged = 1;
+                let mut forward_next_i = forward_i;
+                let mut next_i_3d = i_3d;
+                for x in x + 1..LEN_U32 - 1 {
+                    forward_next_i += FORWARD_STRIDE_X;
+                    next_i_3d += STRIDE_X_3D;
+
+                    if (visible >> x) & 1 == 0
+                        || self.forward_merged[forward_i]
+                            != self.forward_merged[forward_next_i]
+                        || voxel_opt != chunk.voxels[next_i_3d]
+                    {
+                        break;
+                    }
+                    self.forward_merged[forward_next_i] = 0;
+                    right_merged += 1;
+                }
+                let cleared = x + right_merged;
+                visible &= !((1 << cleared) - 1);
+
+                // finish
+                self.scratch.push({
+                    let forward_merged = self.forward_merged[forward_i] as u32;
+
+                    let w = right_merged;
+                    let h = forward_merged + 1;
+
+                    let z = z - forward_merged;
+
+                    let pos = uvec3(x, y, z).as_ivec3() + origin;
+
+                    let t = match voxel {
+                        Voxel::Liquid => 0,
+                        Voxel::Solid => 1,
+                    };
+
+                    Quad::new(pos, w, h, f, t)
+                });
+
+                self.forward_merged[forward_i] = 0
+            }
+        }
+        let k = y as i32 + origin.y;
+        let range = key_range(&quads, |q| q.pos.y, k);
+        quads.splice(range, self.scratch.drain(..));
+    }
+
+    fn remesh_z(
+        &mut self,
+        chunk: Front,
+        origin: IVec3,
+        z: u32,
+        quads: &mut EnumMap<Face, Vec<Quad>>,
+        f: Face,
+    ) {
+        let visible_mask = &mut self.visible_masks[f];
+        let quads = &mut quads[f];
+
+        for y in 1..LEN_U32 - 1 {
+            let i_2d = [y, z].i_2d();
+
+            let mut visible = visible_mask[i_2d];
+            let upward_visible = visible_mask[i_2d + STRIDE_Y_2D];
+
+            while visible != 0 {
+                let x = visible.trailing_zeros();
+
+                let upward_i = x as usize;
+
+                let i = [i_2d, x as usize].i_3d();
+                let voxel_opt = chunk.voxels[i];
+                let voxel = voxel_opt.unwrap();
+
+                // upward merging
+                if (upward_visible >> x) & 1 != 0
+                    && voxel_opt == chunk.voxels[i + STRIDE_Y_3D]
+                {
+                    self.upward_merged[upward_i] += 1;
+                    visible &= visible - 1;
+                    continue;
+                }
+
+                // rightward merging
+                let mut right_merged = 1;
+                let mut upward_next_i = upward_i;
+                let mut next_i_3d = i;
+                for x in x + 1..LEN_U32 - 1 {
+                    upward_next_i += UPWARD_STRIDE_X;
+                    next_i_3d += STRIDE_X_3D;
+
+                    if (visible >> x) & 1 == 0
+                        || self.upward_merged[upward_i]
+                            != self.upward_merged[upward_next_i]
+                        || voxel_opt != chunk.voxels[next_i_3d]
+                    {
+                        break;
+                    }
+                    self.upward_merged[upward_next_i] = 0;
+                    right_merged += 1;
+                }
+                let cleared = x + right_merged;
+                visible &= !((1 << cleared) - 1);
+
+                // finish
+                self.scratch.push({
+                    let upward_merged = self.upward_merged[upward_i] as u32;
+
+                    let w = right_merged;
+                    let h = upward_merged + 1;
+
+                    let y = y - upward_merged;
+
+                    let pos = uvec3(x, y, z).as_ivec3() + origin;
+
+                    let t = match voxel {
+                        Voxel::Liquid => 0,
+                        Voxel::Solid => 1,
+                    };
+
+                    Quad::new(pos, w, h, f, t)
+                });
+
+                self.upward_merged[upward_i] = 0;
+            }
+        }
+        let k = z as i32 + origin.y;
+        let range = key_range(&quads, |q| q.pos.z, k);
+        quads.splice(range, self.scratch.drain(..));
+    }
+
     pub fn mesh(&mut self, chunk: Front, chunk_pos: IVec3) -> EnumMap<Face, Vec<Quad>> {
         let origin = chunk_pos * LEN as i32;
         self.clear();
@@ -377,14 +543,14 @@ impl Mesher {
         self.face_merging(chunk, origin)
     }
 
-    // pub fn remesh(
-    //     &mut self,
-    //     chunk: Front,
-    //     chunk_pos: IVec3,
-    //     quads: &mut EnumMap<Face, Vec<Quad>>,
-    //     remesh: HashSet<(Face, i32)>,
-    // ) {
-    // }
+    pub fn remesh(
+        &mut self,
+        chunk: Front,
+        chunk_pos: IVec3,
+        quads: &mut EnumMap<Face, Vec<Quad>>,
+        remesh: HashSet<(Face, i32)>,
+    ) {
+    }
 }
 
 fn key_range(slice: &[Quad], key: impl Fn(&Quad) -> i32, k: i32) -> Range<usize> {
