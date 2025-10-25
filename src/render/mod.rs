@@ -1,11 +1,16 @@
 pub mod mesher;
 pub mod pipeline;
 
-use bevy::prelude::*;
+use std::mem::take;
+
+use bevy::{math::U64Vec3, prelude::*};
+use bit_iter::BitIter;
 use bytemuck::{Pod, Zeroable};
 use enum_map::{Enum, EnumMap};
 
 pub use Face::*;
+
+use crate::chunk::Index3d;
 
 const MAX6: u32 = (1 << 6) - 1;
 const MAX16: u32 = u16::MAX as u32;
@@ -55,22 +60,25 @@ pub enum Face {
 
 impl Face {
     const ALL: [Self; 6] = [PosX, PosY, PosZ, NegX, NegY, NegZ];
-
-    fn axis(self) -> Axis {
-        match self {
-            PosX | NegX => Axis::X,
-            PosY | NegY => Axis::Y,
-            PosZ | NegZ => Axis::Z,
-        }
-    }
 }
 
-enum Axis {
-    X,
-    Y,
-    Z,
-}
-
+#[derive(Component, Default, Deref, DerefMut)]
 pub struct ChunkMesh {
-    map: EnumMap<Face, Vec<Quad>>,
+    #[deref]
+    pub map: EnumMap<Face, Vec<Quad>>,
+    pub changes: U64Vec3,
+}
+
+impl ChunkMesh {
+    pub fn push_change(&mut self, p: impl Index3d) {
+        let [x, y, z] = p.xyz();
+        self.changes.x |= 1 << x;
+        self.changes.y |= 1 << y;
+        self.changes.z |= 1 << z;
+    }
+
+    pub fn drain_changes(&mut self) -> [BitIter<u64>; 3] {
+        let [x, y, z] = take(&mut self.changes).to_array();
+        [BitIter::from(x), BitIter::from(y), BitIter::from(z)]
+    }
 }

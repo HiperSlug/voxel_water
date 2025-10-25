@@ -335,58 +335,67 @@ impl InnerMesher {
         }
     }
 
-    pub fn mesh(&mut self, chunk: &Chunk, chunk_pos: IVec3) -> EnumMap<Face, Vec<Quad>> {
+    pub fn mesh(&mut self, chunk: &Chunk, chunk_pos: IVec3) -> ChunkMesh {
         let origin = chunk_pos * LEN as i32;
         self.build_all_visible_masks(chunk);
-        self.merged_quads(chunk, origin)
+        ChunkMesh {
+            map: self.merged_quads(chunk, origin),
+            ..default()
+        }
     }
 }
 
 impl Mesher {
-    pub fn remesh(
-        &mut self,
-        chunk: &Chunk,
-        chunk_pos: IVec3,
-        mesh: &mut EnumMap<Face, Vec<Quad>>,
-        zs: impl Iterator<Item = u32> + Clone,
-        ys: impl Iterator<Item = u32> + Clone,
-        xs: impl Iterator<Item = u32> + Clone,
-    ) {
-        let xs_mask: u64 = xs.fold(0, |mask, x| mask | 1 << x);
+    pub fn remesh(&mut self, chunk: &Chunk, chunk_pos: IVec3, mesh: &mut ChunkMesh) {
         let origin = chunk_pos * LEN as i32;
+
+        let xs_mask = mesh.changes.x;
+        let [xs, ys, zs] = mesh
+            .drain_changes()
+            .map(|iter| iter.map(|usize| usize as u32));
+
         self.build_visible_masks(chunk, zs.clone(), ys.clone(), xs_mask);
+
         for f in Face::ALL {
             let quads = &mut mesh[f];
             match f {
                 PosX | NegX => {
                     self.inner
                         .merge_x(chunk, origin, xs_mask, f, &mut self.quads);
+
                     self.quads.sort_unstable_by_key(|q| q.pos.x);
-                    while let Some(x) = self.quads.get(0).map(|q| q.pos.x) {
-                        // FOR ALL X, Y, Z if the iterator is SORTED this can be a for loop
+
+                    for x in xs.clone().map(|x| origin.x + x as i32) {
                         let src_end = self.quads.partition_point(|q| q.pos.x == x);
                         let dst_range = key_range(&quads, |q| q.pos.x, x);
-                        quads.splice(dst_range, self.quads.drain(0..src_end));
+
+                        quads.splice(dst_range, self.quads.drain(..src_end));
                     }
                 }
                 PosY | NegY => {
                     self.inner
                         .merge_y(chunk, origin, ys.clone(), f, &mut self.quads);
+
                     self.quads.sort_unstable_by_key(|q| q.pos.y);
-                    while let Some(y) = self.quads.get(0).map(|q| q.pos.y) {
+
+                    for y in ys.clone().map(|y| origin.y + y as i32) {
                         let src_end = self.quads.partition_point(|q| q.pos.y == y);
                         let dst_range = key_range(&quads, |q| q.pos.y, y);
-                        quads.splice(dst_range, self.quads.drain(0..src_end));
+
+                        quads.splice(dst_range, self.quads.drain(..src_end));
                     }
                 }
                 PosZ | NegZ => {
                     self.inner
                         .merge_z(chunk, origin, zs.clone(), f, &mut self.quads);
-                    self.quads.sort_unstable_by_key(|q| q.pos.z); // unneccecary IF `zs` is sorted
-                    while let Some(z) = self.quads.get(0).map(|q| q.pos.z) {
+
+                    // already sorted
+
+                    for z in zs.clone().map(|z| origin.z + z as i32) {
                         let src_end = self.quads.partition_point(|q| q.pos.z == z);
                         let dst_range = key_range(&quads, |q| q.pos.z, z);
-                        quads.splice(dst_range, self.quads.drain(0..src_end));
+
+                        quads.splice(dst_range, self.quads.drain(..src_end));
                     }
                 }
             }

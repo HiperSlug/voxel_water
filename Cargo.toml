@@ -18,6 +18,7 @@ panic = "abort"
 
 [dependencies]
 bevy = "0.17.2"
+bit-iter = "1.3.1"
 bytemuck = "1.24.0"
 enum-map = "2.7.3"
 ndshape = "0.3.0"

@@ -15,6 +15,7 @@ use bevy::render::view::NoIndirectDrawing;
 
 use crate::chunk::{Chunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
+use crate::render::ChunkMesh;
 use crate::render::mesher::MESHER;
 use crate::render::pipeline::{ChunkQuads, QuadInstancingPlugin};
 
@@ -104,12 +105,13 @@ fn setup(
         );
     let mut chunk = BoxChunk::default();
     chunk.fill_padding(Some(Voxel::Solid));
+    let mesh = MESHER.with_borrow_mut(|mesher| mesher.mesh(&chunk, IVec3::ZERO));
     commands.spawn((
         Mesh3d(meshes.add(quad)),
+        mesh,
         chunk,
         ChunkQuads::default(),
         NoFrustumCulling,
-        // QuadMaterial3d(MeshMaterial3d(materials.add(color)))
     ));
 }
 
@@ -119,20 +121,27 @@ fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
     skybox.rotation *= Quat::from_rotation_y(delta);
 }
 
-fn liquid_tick(mut chunk: Single<&mut BoxChunk>, mut tick: Local<u64>) {
+fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMesh)>, mut tick: Local<u64>) {
+    let (mut chunk, mut mesh) = chunk.into_inner();
+
     chunk.liquid_tick(*tick);
     *tick += 1;
+
+    for (dst, src) in chunk.dst_to_src.drain() {
+        mesh.push_change(dst);
+        mesh.push_change(src);
+    }
 }
 
-fn render_chunk(chunk: Single<(&mut BoxChunk, &mut ChunkQuads)>) {
+fn render_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkQuads)>) {
     MESHER.with_borrow_mut(|mesher| {
-        let (chunk, mut chunk_quads) = chunk.into_inner();
+        let (chunk, mut mesh, mut quads) = chunk.into_inner();
 
-        let quads = mesher.mesh(&chunk, IVec3::ZERO);
+        mesher.remesh(chunk, IVec3::ZERO, &mut mesh);
 
-        chunk_quads.clear();
-        for quads in quads.values() {
-            chunk_quads.extend(quads);
+        quads.clear();
+        for vec in mesh.values() {
+            quads.extend(vec);
         }
     })
 }
@@ -145,21 +154,20 @@ fn input(
     selected_q: Single<(Entity, &mut Visibility), With<SelectedMarker>>,
     player_q: Single<Entity, With<FlyCam>>,
     mb: Res<ButtonInput<MouseButton>>,
-    mut chunk: Single<&mut BoxChunk>,
+    chunk: Single<(&mut BoxChunk, &mut ChunkMesh)>,
     mut scroll: MessageReader<MouseWheel>,
     mut time_step: ResMut<Time<Fixed>>,
     mut anchor: Local<UVec3>,
     chunk_quads: Single<&ChunkQuads>,
 ) {
+    let (mut chunk, mut mesh) = chunk.into_inner();
     let transform = transforms.get(*player_q).unwrap();
 
     if mb.just_pressed(MouseButton::Back) {
         println!("{:?}", chunk_quads[0]);
     }
 
-    let [last, dst] = chunk
-        .as_ref()
-        .raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
+    let [last, dst] = chunk.raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
 
     let (selected_entity, mut selected_visibility) = selected_q.into_inner();
     let mut selected_transform = transforms.get_mut(selected_entity).unwrap();
@@ -168,12 +176,14 @@ fn input(
         && let Some(p) = last
     {
         chunk.set(p, Some(Voxel::Liquid));
+        mesh.push_change(p);
     }
 
     if mb.just_pressed(MouseButton::Left)
         && let Some(p) = dst
     {
         chunk.set(p, None);
+        mesh.push_change(p);
     }
 
     if let Some(p) = last.or(dst) {
@@ -185,18 +195,21 @@ fn input(
                 for y in min.y..=max.y {
                     for x in min.x..=max.x {
                         chunk.set([x, y, z], Some(Voxel::Solid));
+                        mesh.push_change([x, y, z]);
                     }
                 }
             }
             for z in min.z + 1..=max.z - 1 {
                 for x in min.x..=max.x {
                     chunk.set([x, min.y, z], Some(Voxel::Solid));
+                    mesh.push_change([x, min.y, z]);
                 }
             }
             for z in min.z + 1..=max.z - 1 {
                 for y in min.y + 1..=max.y {
                     for x in [min.x, max.x] {
                         chunk.set([x, y, z], Some(Voxel::Solid));
+                        mesh.push_change([x, y, z]);
                     }
                 }
             }

@@ -215,7 +215,6 @@ impl Chunk {
                 }
             }
         }
-        self.dst_to_src.clear();
     }
 }
 
