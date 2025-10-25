@@ -3,7 +3,7 @@ pub mod pipeline;
 
 use bevy::prelude::*;
 use bytemuck::{Pod, Zeroable};
-use enum_map::Enum;
+use enum_map::{Enum, EnumMap};
 
 pub use Face::*;
 
@@ -55,4 +55,22 @@ pub enum Face {
 
 impl Face {
     const ALL: [Self; 6] = [PosX, PosY, PosZ, NegX, NegY, NegZ];
+
+    fn axis(self) -> Axis {
+        match self {
+            PosX | NegX => Axis::X,
+            PosY | NegY => Axis::Y,
+            PosZ | NegZ => Axis::Z,
+        }
+    }
+}
+
+enum Axis {
+    X,
+    Y,
+    Z,
+}
+
+pub struct ChunkMesh {
+    map: EnumMap<Face, Vec<Quad>>,
 }
