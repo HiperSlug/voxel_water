@@ -103,7 +103,7 @@ fn setup(
             vec![Color::WHITE.to_srgba().to_vec4(); 4],
         );
     let mut chunk = BoxChunk::default();
-    chunk.front_mut().fill_padding(Some(Voxel::Solid));
+    chunk.fill_padding(Some(Voxel::Solid));
     commands.spawn((
         Mesh3d(meshes.add(quad)),
         chunk,
@@ -128,7 +128,7 @@ fn render_chunk(chunk: Single<(&mut BoxChunk, &mut ChunkQuads)>) {
     MESHER.with_borrow_mut(|mesher| {
         let (chunk, mut chunk_quads) = chunk.into_inner();
 
-        let quads = mesher.mesh(chunk.front(), IVec3::ZERO);
+        let quads = mesher.mesh(&chunk, IVec3::ZERO);
 
         chunk_quads.clear();
         for quads in quads.values() {
@@ -152,8 +152,6 @@ fn input(
     chunk_quads: Single<&ChunkQuads>,
 ) {
     let transform = transforms.get(*player_q).unwrap();
-
-    let mut chunk = chunk.front_mut();
 
     if mb.just_pressed(MouseButton::Back) {
         println!("{:?}", chunk_quads[0]);

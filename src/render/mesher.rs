@@ -1,4 +1,3 @@
-// TODO: iterative meshing
 // TODO: transparency
 
 use bevy::prelude::*;
@@ -7,7 +6,7 @@ use std::{cell::RefCell, ops::Range};
 
 use super::*;
 
-use crate::chunk::{AREA, Front, LEN, LEN_U32, PAD_MASK, Voxel, index::*};
+use crate::chunk::{AREA, Chunk, LEN, LEN_U32, PAD_MASK, Voxel, index::*};
 
 const UPWARD_STRIDE_X: usize = STRIDE_X_3D;
 const FORWARD_STRIDE_X: usize = STRIDE_X_3D;
@@ -39,24 +38,24 @@ impl Default for Mesher {
                 visible_masks: Box::new(enum_map! { _ => [0; AREA] }),
                 upward_merged: Box::new([0; LEN]),
                 forward_merged: Box::new([0; AREA]),
-            }
+            },
         }
     }
 }
 
 impl InnerMesher {
-    fn build_all_visible_masks(&mut self, chunk: Front) {
+    fn build_all_visible_masks(&mut self, chunk: &Chunk) {
         self.build_visible_masks(chunk, 1..LEN_U32 - 1, 1..LEN_U32 - 1, u64::MAX);
     }
 
     fn build_visible_masks(
         &mut self,
-        chunk: Front,
+        chunk: &Chunk,
         zs: impl Iterator<Item = u32> + Clone,
         ys: impl Iterator<Item = u32> + Clone,
         xs: u64,
     ) {
-        let some_mask = &chunk.masks.some_mask;
+        let some_mask = &chunk.db_masks.front().some_mask;
 
         for f in Face::ALL {
             let visible_mask = &mut self.visible_masks[f];
@@ -87,7 +86,7 @@ impl InnerMesher {
         }
     }
 
-    fn merged_quads(&mut self, chunk: Front, origin: IVec3) -> EnumMap<Face, Vec<Quad>> {
+    fn merged_quads(&mut self, chunk: &Chunk, origin: IVec3) -> EnumMap<Face, Vec<Quad>> {
         let mut map = EnumMap::default();
         for f in Face::ALL {
             let quads = &mut map[f];
@@ -106,14 +105,7 @@ impl InnerMesher {
         map
     }
 
-    fn merge_x(
-        &mut self,
-        chunk: Front, 
-        origin: IVec3, 
-        xs: u64, 
-        f: Face, 
-        quads: &mut Vec<Quad>,
-    ) {
+    fn merge_x(&mut self, chunk: &Chunk, origin: IVec3, xs: u64, f: Face, quads: &mut Vec<Quad>) {
         let visible_mask = &self.visible_masks[f];
 
         for z in 1..LEN_U32 - 1 {
@@ -186,7 +178,7 @@ impl InnerMesher {
 
     fn merge_y(
         &mut self,
-        chunk: Front,
+        chunk: &Chunk,
         origin: IVec3,
         ys: impl Iterator<Item = u32> + Clone,
         f: Face,
@@ -266,7 +258,7 @@ impl InnerMesher {
 
     fn merge_z(
         &mut self,
-        chunk: Front,
+        chunk: &Chunk,
         origin: IVec3,
         zs: impl Iterator<Item = u32>,
         f: Face,
@@ -343,7 +335,7 @@ impl InnerMesher {
         }
     }
 
-    pub fn mesh(&mut self, chunk: Front, chunk_pos: IVec3) -> EnumMap<Face, Vec<Quad>> {
+    pub fn mesh(&mut self, chunk: &Chunk, chunk_pos: IVec3) -> EnumMap<Face, Vec<Quad>> {
         let origin = chunk_pos * LEN as i32;
         self.build_all_visible_masks(chunk);
         self.merged_quads(chunk, origin)
@@ -353,46 +345,50 @@ impl InnerMesher {
 impl Mesher {
     pub fn remesh(
         &mut self,
-        chunk: Front,
+        chunk: &Chunk,
         chunk_pos: IVec3,
         mesh: &mut EnumMap<Face, Vec<Quad>>,
         zs: impl Iterator<Item = u32> + Clone,
         ys: impl Iterator<Item = u32> + Clone,
         xs: impl Iterator<Item = u32> + Clone,
     ) {
-        let xs_mask = xs.fold(0, |mask, x| mask | 1 << x);
+        let xs_mask: u64 = xs.fold(0, |mask, x| mask | 1 << x);
         let origin = chunk_pos * LEN as i32;
         self.build_visible_masks(chunk, zs.clone(), ys.clone(), xs_mask);
         for f in Face::ALL {
             let quads = &mut mesh[f];
             match f {
                 PosX | NegX => {
-                    self.inner.merge_x(chunk, origin, xs_mask, f, &mut self.quads);
+                    self.inner
+                        .merge_x(chunk, origin, xs_mask, f, &mut self.quads);
                     self.quads.sort_unstable_by_key(|q| q.pos.x);
-                    while let Some(x) = self.quads.get(0).map(|q| q.pos.x) { // FOR ALL X, Y, Z if the iterator is SORTED this can be a for loop
+                    while let Some(x) = self.quads.get(0).map(|q| q.pos.x) {
+                        // FOR ALL X, Y, Z if the iterator is SORTED this can be a for loop
                         let src_end = self.quads.partition_point(|q| q.pos.x == x);
                         let dst_range = key_range(&quads, |q| q.pos.x, x);
                         quads.splice(dst_range, self.quads.drain(0..src_end));
                     }
                 }
                 PosY | NegY => {
-                    self.inner.merge_y(chunk, origin, ys.clone(), f, &mut self.quads);
+                    self.inner
+                        .merge_y(chunk, origin, ys.clone(), f, &mut self.quads);
                     self.quads.sort_unstable_by_key(|q| q.pos.y);
                     while let Some(y) = self.quads.get(0).map(|q| q.pos.y) {
                         let src_end = self.quads.partition_point(|q| q.pos.y == y);
                         let dst_range = key_range(&quads, |q| q.pos.y, y);
                         quads.splice(dst_range, self.quads.drain(0..src_end));
                     }
-                },
+                }
                 PosZ | NegZ => {
-                    self.inner.merge_z(chunk, origin, zs.clone(), f, &mut self.quads);
+                    self.inner
+                        .merge_z(chunk, origin, zs.clone(), f, &mut self.quads);
                     self.quads.sort_unstable_by_key(|q| q.pos.z); // unneccecary IF `zs` is sorted
                     while let Some(z) = self.quads.get(0).map(|q| q.pos.z) {
                         let src_end = self.quads.partition_point(|q| q.pos.z == z);
                         let dst_range = key_range(&quads, |q| q.pos.z, z);
                         quads.splice(dst_range, self.quads.drain(0..src_end));
                     }
-                },
+                }
             }
         }
     }

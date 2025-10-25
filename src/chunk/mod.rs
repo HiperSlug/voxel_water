@@ -26,80 +26,34 @@ pub enum Voxel {
     Solid,
 }
 
-pub struct DoubleBufferedChunk {
+pub struct Chunk {
     pub voxels: Voxels,
-    pub masks: DoubleBuffered<Masks>,
+    pub db_masks: DoubleBuffered<Masks>,
+    pub dst_to_src: HashMap<usize, usize>,
 }
 
-impl Default for DoubleBufferedChunk {
+impl Default for Chunk {
     fn default() -> Self {
         Self {
             voxels: [None; VOL],
-            masks: default(),
+            db_masks: default(),
+            dst_to_src: default(),
         }
     }
 }
 
-impl DoubleBufferedChunk {
-    pub fn front(&self) -> Front<'_> {
-        Front {
-            voxels: &self.voxels,
-            masks: self.masks.front(),
-        }
-    }
-
-    pub fn front_mut(&mut self) -> FrontMut<'_> {
-        FrontMut {
-            voxels: &mut self.voxels,
-            masks: self.masks.front_mut(),
-        }
-    }
-
-    // TODO: avoid cloning with change collection and double writes
-    pub fn swap_sync_mut(&mut self) -> (FrontMut<'_>, &mut Masks) {
-        let [front, back] = self.masks.swap_mut();
-        *back = front.clone();
-        (
-            FrontMut {
-                voxels: &mut self.voxels,
-                masks: back,
-            },
-            front,
-        )
-    }
-}
-
-pub struct FrontMut<'a> {
-    pub voxels: &'a mut Voxels,
-    pub masks: &'a mut Masks,
-}
-
-#[derive(Clone, Copy)]
-pub struct Front<'a> {
-    pub voxels: &'a Voxels,
-    pub masks: &'a Masks,
-}
-
-impl<'a> FrontMut<'a> {
-    pub fn as_ref(&self) -> Front<'_> {
-        Front {
-            voxels: &self.voxels,
-            masks: &self.masks,
-        }
-    }
-}
-
-impl<'a> FrontMut<'a> {
+impl Chunk {
     pub fn set(&mut self, p: impl Index3d, v: Option<Voxel>) {
         self.voxels[p.i_3d()] = v;
-        self.masks.set(p, v);
+        self.db_masks.front_mut().set(p, v);
     }
 
     pub fn fill_padding(&mut self, v: Option<Voxel>) {
+        let masks = self.db_masks.front_mut();
         // +-Z
         for z in [0, LEN_U32 - 1] {
             for y in 0..LEN_U32 {
-                self.masks.fill_row([y, z], v);
+                masks.fill_row([y, z], v);
                 for x in 0..LEN_U32 {
                     let i = [x, y, z].i_3d();
                     self.voxels[i] = v;
@@ -110,7 +64,7 @@ impl<'a> FrontMut<'a> {
         // +-Y
         for z in 1..LEN_U32 - 1 {
             for y in [0, LEN_U32 - 1] {
-                self.masks.fill_row([y, z], v);
+                masks.fill_row([y, z], v);
                 for x in 0..LEN_U32 {
                     let i = [x, y, z].i_3d();
                     self.voxels[i] = v;
@@ -121,7 +75,7 @@ impl<'a> FrontMut<'a> {
         // +-X
         for z in 1..LEN_U32 - 1 {
             for y in 1..LEN_U32 - 1 {
-                self.masks.set_row_padding([y, z], v);
+                masks.set_row_padding([y, z], v);
                 for x in [0, LEN_U32 - 1] {
                     let i = [x, y, z].i_3d();
                     self.voxels[i] = v;
@@ -129,10 +83,10 @@ impl<'a> FrontMut<'a> {
             }
         }
     }
-}
 
-impl<'a> Front<'a> {
     pub fn raycast(&self, ray: Ray3d, max: f32) -> [Option<UVec3>; 2] {
+        let masks = self.db_masks.front();
+
         let origin = ray.origin.to_vec3a();
         let dir = ray.direction.to_vec3a();
 
@@ -151,7 +105,7 @@ impl<'a> Front<'a> {
             if in_unpad_bounds {
                 let pos = pos.as_uvec3();
 
-                if self.masks.is_some(pos) {
+                if masks.is_some(pos) {
                     return [last, Some(pos)];
                 }
 
@@ -177,11 +131,4 @@ impl<'a> Front<'a> {
             }
         }
     }
-}
-
-#[derive(Default, Deref, DerefMut)]
-pub struct Chunk {
-    #[deref]
-    pub db_chunk: DoubleBufferedChunk,
-    pub dst_to_src: HashMap<usize, usize>,
 }
