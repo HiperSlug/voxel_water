@@ -19,21 +19,21 @@ impl Default for Masks {
 
 impl Masks {
     pub fn set(&mut self, p: impl Index3d, v: Option<Voxel>) {
-        let [i, shift] = p.i_2d_and_shift();
-        let mask = 1 << shift;
+        let (x, i_2d) = p.x_and_i_2d();
+        let mask = 1 << x;
 
         match v {
             Some(Voxel::Liquid) => {
-                self.some_mask[i] |= mask;
-                self.liquid_mask[i] |= mask;
+                self.some_mask[i_2d] |= mask;
+                self.liquid_mask[i_2d] |= mask;
             }
             Some(_) => {
-                self.some_mask[i] |= mask;
-                self.liquid_mask[i] &= !mask;
+                self.some_mask[i_2d] |= mask;
+                self.liquid_mask[i_2d] &= !mask;
             }
             None => {
-                self.some_mask[i] &= !mask;
-                self.liquid_mask[i] &= !mask;
+                self.some_mask[i_2d] &= !mask;
+                self.liquid_mask[i_2d] &= !mask;
             }
         }
     }
@@ -77,8 +77,8 @@ impl Masks {
     }
 
     pub fn is_some(&self, p: impl Index3d) -> bool {
-        let [i, shift] = p.i_2d_and_shift();
+        let (x, i_2d) = p.x_and_i_2d();
 
-        self.some_mask[i] & (1 << shift) != 0
+        self.some_mask[i_2d] & (1 << x) != 0
     }
 }

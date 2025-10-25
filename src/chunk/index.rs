@@ -43,7 +43,7 @@ impl Index2d for UVec2 {
 pub trait Index3d {
     fn i_3d(&self) -> usize;
 
-    fn i_2d_and_shift(&self) -> [usize; 2];
+    fn x_and_i_2d(&self) -> (u32, usize);
 }
 
 impl Index3d for usize {
@@ -53,20 +53,20 @@ impl Index3d for usize {
     }
 
     #[inline]
-    fn i_2d_and_shift(&self) -> [usize; 2] {
-        [*self >> BITS, *self & MASK_X]
+    fn x_and_i_2d(&self) -> (u32, usize) {
+        ((*self & MASK_X) as u32, *self >> BITS)
     }
 }
 
-impl Index3d for [usize; 2] {
+impl Index3d for (u32, usize) {
     #[inline]
     fn i_3d(&self) -> usize {
-        let [i_2d, shift] = *self;
-        (i_2d << BITS) | shift
+        let (shift, i_2d) = *self;
+        (i_2d << BITS) | shift as usize
     }
 
     #[inline]
-    fn i_2d_and_shift(&self) -> [usize; 2] {
+    fn x_and_i_2d(&self) -> (u32, usize) {
         *self
     }
 }
@@ -78,9 +78,9 @@ impl Index3d for [u32; 3] {
     }
 
     #[inline]
-    fn i_2d_and_shift(&self) -> [usize; 2] {
+    fn x_and_i_2d(&self) -> (u32, usize) {
         let [x, y, z] = *self;
-        [[y, z].i_2d(), x as usize]
+        (x, [y, z].i_2d())
     }
 }
 
@@ -91,7 +91,7 @@ impl Index3d for UVec3 {
     }
 
     #[inline]
-    fn i_2d_and_shift(&self) -> [usize; 2] {
-        self.to_array().i_2d_and_shift()
+    fn x_and_i_2d(&self) -> (u32, usize) {
+        self.to_array().x_and_i_2d()
     }
 }

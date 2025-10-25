@@ -83,7 +83,7 @@ impl<'a> FrontMut<'a> {
 
             if priority >= other_priority {
                 self.masks.set(*other_src_i_3d, Some(Voxel::Liquid));
-                self.masks.set([src_i_2d, x], None);
+                self.masks.set(src_i_3d, None);
 
                 self.voxels[*other_src_i_3d] = self.voxels[src_i_3d];
                 self.voxels[src_i_3d] = None;
