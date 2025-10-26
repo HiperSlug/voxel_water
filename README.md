@@ -1,14 +1,22 @@
 # Voxel Water 
-A cellular based water simulation in a voxel grid. It's governed by simple gravity and kicking (pushing away from eachother) rules that allow the water to spread out.
+A cellular based water simulation in a voxel grid. It's governed by simple gravity rules that make the water spread out.
 
-# Update
-This is the continuation of my voxel water project. This week I setup a custom rendering pipeline for instanced quads based on this [video](https://www.youtube.com/watch?v=40JzyaOYJeY) with adaptations and concessions based on what I'm doing. It currently acts the same as the previous renderer however it's true utility comes in the ability to manually control data flow to allow better culling as well as cheaper per-instance data. 
+Btw I'm using [Bevy](https://bevy.org/) for basically everything else.
 
-Additionally I fixed the collision bias where certain cells would get priority if multiple tried to go to the same cell. My inital solution didn't work and so I replaced it with a suboptimal but random solution. I have an idea on something that might be faster my having reversable moves.
+[VIDEO](https://youtu.be/Sgi_PgaPVHo) demo. COOL demo
 
-I [learned](https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab) basic linear algebra for the transforms. 
+# Update #3
+This is the continuation of my voxel water project. This week I did two major things:
+1. Reworked the movement system. I changed the setup completely to make it WAY more readable as well as fix a litney of small problems. 
+2. Added incremental meshing. I setup the meshing algorithm to be able to modify a mesh *in place* so every time I move a cell I only remesh the 12 faces that it directly influences instead of *all* of them.
 
-I also wrote some shaders in wgsl.
+# Future
+I setup a very primitive rendering pipeline last week. I really should've worked on that but it *scares* me.
+
+I also have to eventually move to a multi-chunk simulation. Which means suddenly I have a mix of dense and sparse data that I'm trying to handle, preferabbly in parrallel and/or in background threads.
+
+# Gambling
+I set a high personal bet on thursday then got **sick** on friday...
 
 # Theme 
-This project is loosly liked to the theme "Signals". For example voxel changes propagate signals through chains of liquid like physics. Additionally this week quad data needs to be constantly streamed (signaled) to the gpu to render updated voxels.
+I got a freeby. This is literally water *falling*.

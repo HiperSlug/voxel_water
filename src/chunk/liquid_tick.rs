@@ -10,6 +10,7 @@ const I_STRIDE_X_3D: isize = STRIDE_X_3D as isize;
 const I_STRIDE_Y_3D: isize = STRIDE_Y_3D as isize;
 const I_STRIDE_Z_3D: isize = STRIDE_Z_3D as isize;
 
+// TODO: make this mess *disappear*
 const MOVES: &[&[(Delta, &[PreReq])]] = &[
     &[
         (Delta::new([1, -1, 0]), &[PreReq::none([1, 0, 0])]),
