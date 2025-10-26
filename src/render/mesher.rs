@@ -76,16 +76,12 @@ impl InnerMesher {
         }
     }
 
-    fn build_visible_masks(
-        &mut self,
-        chunk: &Chunk,
-        changes: U64Vec3,
-    ) {
+    fn build_visible_masks(&mut self, chunk: &Chunk, changes: U64Vec3) {
         let some_mask = &chunk.front_masks.some_mask;
 
         for f in Face::ALL {
             let visible_mask = &mut self.visible_masks[f];
-            
+
             let mut f = |y: u32, z: u32, xs: u64| {
                 let i_2d = [y, z].i_2d();
 
@@ -113,7 +109,7 @@ impl InnerMesher {
                     f(y, z, !0)
                 }
             }
-            
+
             // y
             for z in BitIter::from((!changes.z) & !PAD_MASK).map(u32) {
                 for y in BitIter::from(changes.y & !PAD_MASK).map(u32) {
@@ -393,9 +389,7 @@ impl Mesher {
         let origin = chunk_pos * LEN as i32;
 
         let xs_mask = mesh.changes.x;
-        let changes = mesh
-            .take_changes();
-
+        let changes = mesh.take_changes();
 
         self.build_visible_masks(chunk, changes);
 
@@ -416,8 +410,13 @@ impl Mesher {
                     }
                 }
                 PosY | NegY => {
-                    self.inner
-                        .merge_y(chunk, origin, BitIter::from(changes.y).map(u32), f, &mut self.quads);
+                    self.inner.merge_y(
+                        chunk,
+                        origin,
+                        BitIter::from(changes.y).map(u32),
+                        f,
+                        &mut self.quads,
+                    );
 
                     self.quads.sort_unstable_by_key(|q| q.pos.y);
 
@@ -429,8 +428,13 @@ impl Mesher {
                     }
                 }
                 PosZ | NegZ => {
-                    self.inner
-                        .merge_z(chunk, origin, BitIter::from(changes.z).map(u32), f, &mut self.quads);
+                    self.inner.merge_z(
+                        chunk,
+                        origin,
+                        BitIter::from(changes.z).map(u32),
+                        f,
+                        &mut self.quads,
+                    );
 
                     // already sorted
 
@@ -453,4 +457,6 @@ fn key_range(slice: &[Quad], key: impl Fn(&Quad) -> i32, k: i32) -> Range<usize>
     start..end
 }
 
-fn u32(usize: usize) -> u32 { usize as u32 }
+fn u32(usize: usize) -> u32 {
+    usize as u32
+}

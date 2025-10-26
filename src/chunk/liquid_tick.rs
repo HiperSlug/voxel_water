@@ -3,7 +3,6 @@ use bit_iter::BitIter;
 use std::hash::BuildHasher;
 
 use super::*;
-
 const I_STRIDE_Y_2D: isize = STRIDE_Y_2D as isize;
 const I_STRIDE_Z_2D: isize = STRIDE_Z_2D as isize;
 
@@ -171,24 +170,17 @@ impl Chunk {
     ) -> u64 {
         let dst_i_2d = src_i_2d.wrapping_add_signed(d.i_2d);
 
-        let prereq_mask = prereqs.iter().fold(!0, |acc, prereq| {
-            let i_2d = src_i_2d.wrapping_add_signed(prereq.delta_i_2d);
-            let mask = signed_shl(self.front_masks.some_mask[i_2d], prereq.delta_x);
+        let try_move = group
+            & self.build_prereq_mask(src_i_2d, prereqs)
+            & !self.front_masks.some_mask[dst_i_2d].inv_shift(d.x);
 
-            if prereq.not { acc & !mask } else { acc & mask }
-        });
-
-        let try_move = group & !signed_shr(self.front_masks.some_mask[dst_i_2d], d.x) & prereq_mask;
-
-        let dst_some = signed_shr(self.back_masks.some_mask[dst_i_2d], d.x);
-
-        let success = try_move & !dst_some;
-        let failure = try_move & dst_some;
+        let success = try_move & !self.back_masks.some_mask[dst_i_2d].inv_shift(d.x);
+        let failure = try_move & !success;
 
         let mut moved = success;
 
         if success != 0 {
-            let add_mask = signed_shl(success, d.x);
+            let add_mask = success.shift(d.x);
 
             // INVARIANT: Only voxels marked `some` && `liquid` are ever moved with this function.
             self.back_masks.some_mask[dst_i_2d] |= add_mask;
@@ -232,12 +224,31 @@ impl Chunk {
 
         moved
     }
+
+    fn build_prereq_mask(&self, src_i_2d: usize, prereqs: &[PreReq]) -> u64 {
+        let mut prereq_mask = !0;
+        for prereq in prereqs {
+            let i_2d = src_i_2d.wrapping_add_signed(prereq.delta_i_2d);
+            let mask = self.front_masks.some_mask[i_2d].inv_shift(prereq.delta_x);
+
+            prereq_mask &= if prereq.not { !mask } else { mask };
+        }
+        prereq_mask
+    }
 }
 
-fn signed_shl(n: u64, s: isize) -> u64 {
-    if s > 0 { n << s } else { n >> -s }
+trait Shift: Copy {
+    /// `+ => shl`, \
+    /// `- => shr`,
+    fn shift(self, rhs: isize) -> u64;
+
+    fn inv_shift(self, rhs: isize) -> u64 {
+        self.shift(-rhs)
+    }
 }
 
-fn signed_shr(n: u64, s: isize) -> u64 {
-    if s > 0 { n >> s } else { n << -s }
+impl Shift for u64 {
+    fn shift(self, rhs: isize) -> u64 {
+        if rhs > 0 { self << rhs } else { self >> -rhs }
+    }
 }

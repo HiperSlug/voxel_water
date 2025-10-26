@@ -13,7 +13,7 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
 
-use crate::chunk::{Chunk, Voxel};
+use crate::chunk::{Chunk, Index3d, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::render::ChunkMesh;
 use crate::render::mesher::MESHER;
@@ -127,10 +127,25 @@ fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMesh)>, mut tick: Local<u
     chunk.liquid_tick(*tick);
     *tick += 1;
 
-    for (dst, src) in chunk.dst_to_src.drain() {
+    let Chunk {
+        dst_to_src,
+        front_masks,
+        back_masks,
+        ..
+    } = &mut ***chunk; // lol
+    *front_masks = back_masks.clone();
+
+    for (dst, src) in dst_to_src.drain() {
+        // let (_, i_2d) = dst.x_and_i_2d();
+
+        // front_masks.some_mask[i_2d] = back_masks.some_mask[i_2d];
+        // front_masks.liquid_mask[i_2d] = back_masks.liquid_mask[i_2d];
+
         mesh.push_change(dst);
         mesh.push_change(src);
     }
+
+    chunk.dst_to_src.clear();
 }
 
 fn render_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkQuads)>) {
