@@ -104,7 +104,7 @@ impl InnerMesher {
                 }
             };
 
-            for z in BitIter::from(changes.z & !PAD_MASK).map(u32) {
+            for z in BitIter::from(changes.z).map(u32) {
                 for y in 1..LEN_U32 - 1 {
                     f(y, z, !0)
                 }
@@ -112,7 +112,7 @@ impl InnerMesher {
 
             // y
             for z in BitIter::from((!changes.z) & !PAD_MASK).map(u32) {
-                for y in BitIter::from(changes.y & !PAD_MASK).map(u32) {
+                for y in BitIter::from(changes.y).map(u32) {
                     f(y, z, !0)
                 }
             }
@@ -387,22 +387,25 @@ impl InnerMesher {
 impl Mesher {
     pub fn remesh(&mut self, chunk: &Chunk, chunk_pos: IVec3, mesh: &mut ChunkMesh) {
         let origin = chunk_pos * LEN as i32;
+        
+        let remesh = mesh.take_changes().map(|x| (x | x << 1 | x >> 1) & !PAD_MASK);
 
-        let xs_mask = mesh.changes.x;
-        let changes = mesh.take_changes();
+        if remesh == U64Vec3::ZERO {
+            return;
+        }
 
-        self.build_visible_masks(chunk, changes);
+        self.build_visible_masks(chunk, remesh);
 
         for f in Face::ALL {
             let quads = &mut mesh[f];
             match f {
                 PosX | NegX => {
                     self.inner
-                        .merge_x(chunk, origin, xs_mask, f, &mut self.quads);
+                        .merge_x(chunk, origin, remesh.x, f, &mut self.quads);
 
                     self.quads.sort_unstable_by_key(|q| q.pos.x);
 
-                    for x in BitIter::from(changes.x).map(|x| origin.x + x as i32) {
+                    for x in BitIter::from(remesh.x).map(|x| origin.x + x as i32) {
                         let src_end = self.quads.partition_point(|q| q.pos.x == x);
                         let dst_range = key_range(&quads, |q| q.pos.x, x);
 
@@ -413,14 +416,14 @@ impl Mesher {
                     self.inner.merge_y(
                         chunk,
                         origin,
-                        BitIter::from(changes.y).map(u32),
+                        BitIter::from(remesh.y).map(u32),
                         f,
                         &mut self.quads,
                     );
 
                     self.quads.sort_unstable_by_key(|q| q.pos.y);
 
-                    for y in BitIter::from(changes.y).map(|y| origin.y + y as i32) {
+                    for y in BitIter::from(remesh.y).map(|y| origin.y + y as i32) {
                         let src_end = self.quads.partition_point(|q| q.pos.y == y);
                         let dst_range = key_range(&quads, |q| q.pos.y, y);
 
@@ -431,14 +434,14 @@ impl Mesher {
                     self.inner.merge_z(
                         chunk,
                         origin,
-                        BitIter::from(changes.z).map(u32),
+                        BitIter::from(remesh.z).map(u32),
                         f,
                         &mut self.quads,
                     );
 
                     // already sorted
 
-                    for z in BitIter::from(changes.z).map(|z| origin.z + z as i32) {
+                    for z in BitIter::from(remesh.z).map(|z| origin.z + z as i32) {
                         let src_end = self.quads.partition_point(|q| q.pos.z == z);
                         let dst_range = key_range(&quads, |q| q.pos.z, z);
 
