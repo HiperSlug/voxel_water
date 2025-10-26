@@ -146,7 +146,13 @@ impl Chunk {
 
                             let (d, prereqs) = &moves[j];
 
-                            self.try_move_row(group, i_2d, &state, d, prereqs);
+                            let moved = self.try_move_row(group, i_2d, &state, d, prereqs);
+
+                            liquid &= !moved;
+
+                            if liquid == 0 {
+                                continue 'row;
+                            }
                         }
                     }
                 }
@@ -165,11 +171,11 @@ impl Chunk {
     ) -> u64 {
         let dst_i_2d = src_i_2d.wrapping_add_signed(d.i_2d);
 
-        let prereq_mask = prereqs.iter().fold(0, |acc, prereq| {
+        let prereq_mask = prereqs.iter().fold(!0, |acc, prereq| {
             let i_2d = src_i_2d.wrapping_add_signed(prereq.delta_i_2d);
             let mask = signed_shl(self.front_masks.some_mask[i_2d], prereq.delta_x);
 
-            if prereq.not { acc | !mask } else { acc | mask }
+            if prereq.not { acc & !mask } else { acc & mask }
         });
 
         let try_move = group & !signed_shr(self.front_masks.some_mask[dst_i_2d], d.x) & prereq_mask;

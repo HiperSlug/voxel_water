@@ -77,8 +77,7 @@ impl ChunkMesh {
         self.changes.z |= 1 << z;
     }
 
-    pub fn drain_changes(&mut self) -> [BitIter<u64>; 3] {
-        let [x, y, z] = take(&mut self.changes).to_array();
-        [BitIter::from(x), BitIter::from(y), BitIter::from(z)]
+    pub fn take_changes(&mut self) -> U64Vec3 {
+        take(&mut self.changes)
     }
 }

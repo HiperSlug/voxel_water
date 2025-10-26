@@ -45,27 +45,17 @@ impl Default for Mesher {
 
 impl InnerMesher {
     fn build_all_visible_masks(&mut self, chunk: &Chunk) {
-        self.build_visible_masks(chunk, 1..LEN_U32 - 1, 1..LEN_U32 - 1, u64::MAX);
-    }
-
-    fn build_visible_masks(
-        &mut self,
-        chunk: &Chunk,
-        zs: impl Iterator<Item = u32> + Clone,
-        ys: impl Iterator<Item = u32> + Clone,
-        xs: u64,
-    ) {
         let some_mask = &chunk.front_masks.some_mask;
 
         for f in Face::ALL {
             let visible_mask = &mut self.visible_masks[f];
 
-            for z in zs.clone() {
-                for y in ys.clone() {
+            for z in 1..LEN_U32 - 1 {
+                for y in 1..LEN_U32 - 1 {
                     let i_2d = [y, z].i_2d();
 
                     let some = some_mask[i_2d];
-                    let unpad_some = some & xs & !PAD_MASK;
+                    let unpad_some = some & !PAD_MASK;
 
                     if unpad_some == 0 {
                         visible_mask[i_2d] = 0;
@@ -81,6 +71,59 @@ impl InnerMesher {
 
                         visible_mask[i_2d] = unpad_some & !adj_some;
                     }
+                }
+            }
+        }
+    }
+
+    fn build_visible_masks(
+        &mut self,
+        chunk: &Chunk,
+        changes: U64Vec3,
+    ) {
+        let some_mask = &chunk.front_masks.some_mask;
+
+        for f in Face::ALL {
+            let visible_mask = &mut self.visible_masks[f];
+            
+            let mut f = |y: u32, z: u32, xs: u64| {
+                let i_2d = [y, z].i_2d();
+
+                let some = some_mask[i_2d];
+                let unpad_some = some & !PAD_MASK & xs;
+
+                if unpad_some == 0 {
+                    visible_mask[i_2d] = 0;
+                } else {
+                    let adj_some = match f {
+                        PosX => some >> 1,
+                        NegX => some << 1,
+                        PosY => some_mask[i_2d + STRIDE_Y_2D],
+                        NegY => some_mask[i_2d - STRIDE_Y_2D],
+                        PosZ => some_mask[i_2d + STRIDE_Z_2D],
+                        NegZ => some_mask[i_2d - STRIDE_Z_2D],
+                    };
+
+                    visible_mask[i_2d] = unpad_some & !adj_some;
+                }
+            };
+
+            for z in BitIter::from(changes.z & !PAD_MASK).map(u32) {
+                for y in 1..LEN_U32 - 1 {
+                    f(y, z, !0)
+                }
+            }
+            
+            // y
+            for z in BitIter::from((!changes.z) & !PAD_MASK).map(u32) {
+                for y in BitIter::from(changes.y & !PAD_MASK).map(u32) {
+                    f(y, z, !0)
+                }
+            }
+
+            for z in BitIter::from((!changes.z) & !PAD_MASK).map(u32) {
+                for y in BitIter::from((!changes.y) & !PAD_MASK).map(u32) {
+                    f(y, z, changes.x)
                 }
             }
         }
@@ -350,11 +393,11 @@ impl Mesher {
         let origin = chunk_pos * LEN as i32;
 
         let xs_mask = mesh.changes.x;
-        let [xs, ys, zs] = mesh
-            .drain_changes()
-            .map(|iter| iter.map(|usize| usize as u32));
+        let changes = mesh
+            .take_changes();
 
-        self.build_visible_masks(chunk, zs.clone(), ys.clone(), xs_mask);
+
+        self.build_visible_masks(chunk, changes);
 
         for f in Face::ALL {
             let quads = &mut mesh[f];
@@ -365,7 +408,7 @@ impl Mesher {
 
                     self.quads.sort_unstable_by_key(|q| q.pos.x);
 
-                    for x in xs.clone().map(|x| origin.x + x as i32) {
+                    for x in BitIter::from(changes.x).map(|x| origin.x + x as i32) {
                         let src_end = self.quads.partition_point(|q| q.pos.x == x);
                         let dst_range = key_range(&quads, |q| q.pos.x, x);
 
@@ -374,11 +417,11 @@ impl Mesher {
                 }
                 PosY | NegY => {
                     self.inner
-                        .merge_y(chunk, origin, ys.clone(), f, &mut self.quads);
+                        .merge_y(chunk, origin, BitIter::from(changes.y).map(u32), f, &mut self.quads);
 
                     self.quads.sort_unstable_by_key(|q| q.pos.y);
 
-                    for y in ys.clone().map(|y| origin.y + y as i32) {
+                    for y in BitIter::from(changes.y).map(|y| origin.y + y as i32) {
                         let src_end = self.quads.partition_point(|q| q.pos.y == y);
                         let dst_range = key_range(&quads, |q| q.pos.y, y);
 
@@ -387,11 +430,11 @@ impl Mesher {
                 }
                 PosZ | NegZ => {
                     self.inner
-                        .merge_z(chunk, origin, zs.clone(), f, &mut self.quads);
+                        .merge_z(chunk, origin, BitIter::from(changes.z).map(u32), f, &mut self.quads);
 
                     // already sorted
 
-                    for z in zs.clone().map(|z| origin.z + z as i32) {
+                    for z in BitIter::from(changes.z).map(|z| origin.z + z as i32) {
                         let src_end = self.quads.partition_point(|q| q.pos.z == z);
                         let dst_range = key_range(&quads, |q| q.pos.z, z);
 
@@ -409,3 +452,5 @@ fn key_range(slice: &[Quad], key: impl Fn(&Quad) -> i32, k: i32) -> Range<usize>
     let end = start + len;
     start..end
 }
+
+fn u32(usize: usize) -> u32 { usize as u32 }
