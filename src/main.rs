@@ -13,7 +13,7 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
 
-use crate::chunk::{Chunk, Index3d, Voxel};
+use crate::chunk::{Chunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::render::ChunkMesh;
 use crate::render::mesher::MESHER;
@@ -133,19 +133,19 @@ fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMesh)>, mut tick: Local<u
         back_masks,
         ..
     } = &mut ***chunk; // lol
-    // *front_masks = back_masks.clone();
+    *front_masks = back_masks.clone();
 
     for (dst, src) in dst_to_src.drain() {
         // so this actually might be worse because there is no per-row dedup
-        // per-row dedup would require either 
-        let (_, i_2d) = dst.x_and_i_2d();
-        let (_, i_2d_2) = src.x_and_i_2d();
+        // per-row dedup would require either some cool alogrithm (i cannot think of one), or another collection (dense = 64^2 bits, sparse = hashset)
+        // let (_, i_2d) = dst.x_and_i_2d();
+        // let (_, i_2d_2) = src.x_and_i_2d();
 
-        front_masks.some_mask[i_2d] = back_masks.some_mask[i_2d];
-        front_masks.liquid_mask[i_2d] = back_masks.liquid_mask[i_2d];
+        // front_masks.some_mask[i_2d] = back_masks.some_mask[i_2d];
+        // front_masks.liquid_mask[i_2d] = back_masks.liquid_mask[i_2d];
 
-        front_masks.some_mask[i_2d_2] = back_masks.some_mask[i_2d_2];
-        front_masks.liquid_mask[i_2d_2= back_masks.liquid_mask[i_2d_2];
+        // front_masks.some_mask[i_2d_2] = back_masks.some_mask[i_2d_2];
+        // front_masks.liquid_mask[i_2d_2] = back_masks.liquid_mask[i_2d_2];
 
         mesh.push_change(dst);
         mesh.push_change(src);

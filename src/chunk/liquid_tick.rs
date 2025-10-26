@@ -53,7 +53,7 @@ const MOVES: &[&[(Delta, &[PreReq])]] = &[
     ],
     &[
         (Delta::new([1, 0, 0]), &[PreReq::some([-1, 0, 0])]),
-        (Delta::new([-1, 0, 0]), &[PreReq::some([-1, 0, 0])]),
+        (Delta::new([-1, 0, 0]), &[PreReq::some([1, 0, 0])]),
         (Delta::new([0, 0, 1]), &[PreReq::some([0, 0, -1])]),
         (Delta::new([0, 0, -1]), &[PreReq::some([0, 0, 1])]),
     ],
