@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use ndshape::{ConstPow2Shape2u32, ConstPow2Shape3u32, ConstShape as _};
 
-use super::*;
+use super::BITS;
 
 pub type Shape3d = ConstPow2Shape3u32<BITS, BITS, BITS>;
 pub type Shape2d = ConstPow2Shape2u32<BITS, BITS>;
@@ -15,7 +15,7 @@ pub const STRIDE_Z_2D: usize = 1 << Shape2d::SHIFTS[1];
 
 const MASK_X: usize = Shape3d::MASKS[0] as usize;
 
-pub trait Index2d {
+pub trait Index2d: Copy {
     fn i_2d(&self) -> usize;
 
     fn yz(&self) -> [u32; 2];
@@ -57,7 +57,7 @@ impl Index2d for UVec2 {
     }
 }
 
-pub trait Index3d {
+pub trait Index3d: Copy {
     fn i_3d(&self) -> usize;
 
     fn x_and_i_2d(&self) -> (u32, usize);
@@ -79,6 +79,26 @@ impl Index3d for usize {
     #[inline]
     fn xyz(&self) -> [u32; 3] {
         Shape3d::delinearize(*self as u32)
+    }
+}
+
+impl Index3d for (usize, usize) {
+    #[inline]
+    fn i_3d(&self) -> usize {
+        let (x, i_2d) = *self;
+        (i_2d << BITS) | x
+    }
+
+    #[inline]
+    fn x_and_i_2d(&self) -> (u32, usize) {
+        (self.0 as u32, self.1)
+    }
+
+    #[inline]
+    fn xyz(&self) -> [u32; 3] {
+        let (x, i_2d) = *self;
+        let [y, z] = i_2d.yz();
+        [x as u32, y, z]
     }
 }
 
@@ -135,4 +155,14 @@ impl Index3d for UVec3 {
     fn xyz(&self) -> [u32; 3] {
         self.to_array()
     }
+}
+
+pub fn signed_linearize_2d(p: [i32; 2]) -> isize {
+    let [y, z] = p;
+    (y * STRIDE_Y_2D as i32 + z * STRIDE_Z_2D as i32) as isize
+}
+
+pub fn signed_linearize_3d(p: [i32; 3]) -> isize {
+    let [x, y, z] = p;
+    (x * STRIDE_X_3D as i32 + y * STRIDE_Y_3D as i32 + z * STRIDE_Z_3D as i32) as isize
 }
