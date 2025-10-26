@@ -156,13 +156,3 @@ impl Index3d for UVec3 {
         self.to_array()
     }
 }
-
-pub fn signed_linearize_2d(p: [i32; 2]) -> isize {
-    let [y, z] = p;
-    (y * STRIDE_Y_2D as i32 + z * STRIDE_Z_2D as i32) as isize
-}
-
-pub fn signed_linearize_3d(p: [i32; 3]) -> isize {
-    let [x, y, z] = p;
-    (x * STRIDE_X_3D as i32 + y * STRIDE_Y_3D as i32 + z * STRIDE_Z_3D as i32) as isize
-}

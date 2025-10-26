@@ -55,7 +55,7 @@ impl InnerMesher {
         ys: impl Iterator<Item = u32> + Clone,
         xs: u64,
     ) {
-        let some_mask = &chunk.db_masks.front().some_mask;
+        let some_mask = &chunk.front_masks.some_mask;
 
         for f in Face::ALL {
             let visible_mask = &mut self.visible_masks[f];
