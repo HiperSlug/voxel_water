@@ -238,18 +238,28 @@ impl Chunk {
     }
 }
 
+/// `+ => shl`, \
+/// `- => shr`,
 trait Shift: Copy {
-    /// `+ => shl`, \
-    /// `- => shr`,
     fn shift(self, rhs: isize) -> u64;
 
-    fn inv_shift(self, rhs: isize) -> u64 {
-        self.shift(-rhs)
-    }
+    fn inv_shift(self, rhs: isize) -> u64;
 }
 
 impl Shift for u64 {
     fn shift(self, rhs: isize) -> u64 {
-        if rhs > 0 { self << rhs } else { self >> -rhs }
+        let mut out = self >> -rhs;
+        if rhs > 0 { 
+            out = self << rhs
+        }
+        out
+    }
+
+    fn inv_shift(self, rhs: isize) -> u64 {
+        let mut out = self << -rhs;
+        if rhs > 0 { 
+            out = self >> rhs
+        }
+        out
     }
 }
