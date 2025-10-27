@@ -3,7 +3,7 @@ A cellular based water simulation in a voxel grid. It's governed by simple gravi
 
 Btw I'm using [Bevy](https://bevy.org/) for basically everything else.
 
-[VIDEO](https://youtu.be/Sgi_PgaPVHo) demo. COOL demo
+[VIDEO](https://youtu.be/Sgi_PgaPVHo) demo. [COOL](https://hiperslug.itch.io/magic) demo
 
 # Update #3
 This is the continuation of my voxel water project. This week I did two major things:
