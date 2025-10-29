@@ -387,8 +387,10 @@ impl InnerMesher {
 impl Mesher {
     pub fn remesh(&mut self, chunk: &Chunk, chunk_pos: IVec3, mesh: &mut ChunkMesh) {
         let origin = chunk_pos * LEN as i32;
-        
-        let remesh = mesh.take_changes().map(|x| (x | x << 1 | x >> 1) & !PAD_MASK);
+
+        let remesh = mesh
+            .take_changes()
+            .map(|x| (x | x << 1 | x >> 1) & !PAD_MASK);
 
         if remesh == U64Vec3::ZERO {
             return;

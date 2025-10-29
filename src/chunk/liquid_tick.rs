@@ -248,17 +248,17 @@ trait Shift: Copy {
 
 impl Shift for u64 {
     fn shift(self, rhs: isize) -> u64 {
-        let mut out = self >> -rhs;
-        if rhs > 0 { 
-            out = self << rhs
+        let mut out = self.wrapping_shr(-rhs as u32);
+        if rhs > 0 {
+            out = self.wrapping_shl(rhs as u32)
         }
         out
     }
 
     fn inv_shift(self, rhs: isize) -> u64 {
-        let mut out = self << -rhs;
-        if rhs > 0 { 
-            out = self >> rhs
+        let mut out = self.wrapping_shl(-rhs as u32);
+        if rhs > 0 {
+            out = self.wrapping_shr(rhs as u32)
         }
         out
     }
