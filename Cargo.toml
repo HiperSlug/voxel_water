@@ -17,7 +17,8 @@ strip = true
 panic = "abort"
 
 [dependencies]
-bevy = "0.17.2"
+bevy = { version = "0.17.2", features = ["basis-universal"] }
+bevy_tweening = "0.14.0"
 bit-iter = "1.3.1"
 bytemuck = "1.24.0"
 enum-map = "2.7.3"

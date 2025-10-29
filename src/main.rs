@@ -1,5 +1,6 @@
 mod chunk;
 mod flycam;
+mod jumpscare;
 mod render;
 
 use std::f32::consts::PI;
@@ -15,6 +16,7 @@ use bevy::render::view::NoIndirectDrawing;
 
 use crate::chunk::{Chunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
+use crate::jumpscare::JumpscarePlugin;
 use crate::render::ChunkMesh;
 use crate::render::mesher::MESHER;
 use crate::render::pipeline::{ChunkQuads, QuadInstancingPlugin};
@@ -30,7 +32,12 @@ struct Game;
 
 impl Plugin for Game {
     fn build(&self, app: &mut App) {
-        app.add_plugins((DefaultPlugins, NoCameraPlayerPlugin, QuadInstancingPlugin));
+        app.add_plugins((
+            DefaultPlugins,
+            NoCameraPlayerPlugin,
+            QuadInstancingPlugin,
+            JumpscarePlugin,
+        ));
 
         embedded_asset!(app, "skybox.ktx2");
 
