@@ -1,8 +1,6 @@
 pub mod mesher;
 pub mod pipeline;
 
-use std::mem::take;
-
 use bevy::{math::U64Vec3, prelude::*};
 use bit_iter::BitIter;
 use bytemuck::{Pod, Zeroable};
@@ -62,22 +60,17 @@ impl Face {
     const ALL: [Self; 6] = [PosX, PosY, PosZ, NegX, NegY, NegZ];
 }
 
-#[derive(Component, Default, Deref, DerefMut)]
-pub struct ChunkMesh {
-    #[deref]
-    pub map: EnumMap<Face, Vec<Quad>>,
-    pub changes: U64Vec3,
-}
+#[derive(Component, Deref, DerefMut)]
+pub struct ChunkMesh(pub EnumMap<Face, Vec<Quad>>);
 
-impl ChunkMesh {
-    pub fn push_change(&mut self, p: impl Index3d) {
+#[derive(Component, Default, Clone, Copy)]
+pub struct ChunkMeshChanges(pub U64Vec3);
+
+impl ChunkMeshChanges {
+    pub fn push(&mut self, p: impl Index3d) {
         let [x, y, z] = p.xyz();
-        self.changes.x |= 1 << x;
-        self.changes.y |= 1 << y;
-        self.changes.z |= 1 << z;
-    }
-
-    pub fn take_changes(&mut self) -> U64Vec3 {
-        take(&mut self.changes)
+        self.0.x |= 1 << x;
+        self.0.y |= 1 << y;
+        self.0.z |= 1 << z;
     }
 }

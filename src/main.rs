@@ -17,7 +17,7 @@ use bevy::render::view::NoIndirectDrawing;
 use crate::chunk::{Chunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::jumpscare::JumpscarePlugin;
-use crate::render::ChunkMesh;
+use crate::render::{ChunkMesh, ChunkMeshChanges};
 use crate::render::mesher::MESHER;
 use crate::render::pipeline::{ChunkQuads, QuadInstancingPlugin};
 
@@ -116,6 +116,7 @@ fn setup(
     commands.spawn((
         Mesh3d(meshes.add(quad)),
         mesh,
+        ChunkMeshChanges::default(),
         chunk,
         ChunkQuads::default(),
         NoFrustumCulling,
@@ -128,44 +129,25 @@ fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
     skybox.rotation *= Quat::from_rotation_y(delta);
 }
 
-fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMesh)>, mut tick: Local<u64>) {
-    let (mut chunk, mut mesh) = chunk.into_inner();
+fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>, mut tick: Local<u64>) {
+    let (mut chunk, mut changes) = chunk.into_inner();
 
     chunk.liquid_tick(*tick);
     *tick += 1;
 
-    let Chunk {
-        dst_to_src,
-        front_masks,
-        back_masks,
-        ..
-    } = &mut ***chunk; // lol
-    *front_masks = back_masks.clone();
+    chunk.front_masks = chunk.back_masks.clone();
 
-    for (dst, src) in dst_to_src.drain() {
-        // so this actually might be worse because there is no per-row dedup
-        // per-row dedup would require either some cool alogrithm (i cannot think of one), or another collection (dense = 64^2 bits, sparse = hashset)
-        // let (_, i_2d) = dst.x_and_i_2d();
-        // let (_, i_2d_2) = src.x_and_i_2d();
-
-        // front_masks.some_mask[i_2d] = back_masks.some_mask[i_2d];
-        // front_masks.liquid_mask[i_2d] = back_masks.liquid_mask[i_2d];
-
-        // front_masks.some_mask[i_2d_2] = back_masks.some_mask[i_2d_2];
-        // front_masks.liquid_mask[i_2d_2] = back_masks.liquid_mask[i_2d_2];
-
-        mesh.push_change(dst);
-        mesh.push_change(src);
+    for (dst, src) in chunk.dst_to_src.drain() {
+        changes.push(dst);
+        changes.push(src);
     }
-
-    chunk.dst_to_src.clear();
 }
 
-fn render_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkQuads)>) {
+fn render_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkMeshChanges, &mut ChunkQuads)>) {
     MESHER.with_borrow_mut(|mesher| {
-        let (chunk, mut mesh, mut quads) = chunk.into_inner();
+        let (chunk, mut mesh, mut changes, mut quads) = chunk.into_inner();
 
-        mesher.remesh(chunk, IVec3::ZERO, &mut mesh);
+        mesher.remesh(chunk, IVec3::ZERO, &mut mesh, &mut changes);
 
         quads.clear();
         for vec in mesh.values() {
@@ -182,36 +164,32 @@ fn input(
     selected_q: Single<(Entity, &mut Visibility), With<SelectedMarker>>,
     player_q: Single<Entity, With<FlyCam>>,
     mb: Res<ButtonInput<MouseButton>>,
-    chunk: Single<(&mut BoxChunk, &mut ChunkMesh)>,
+    chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>,
     mut scroll: MessageReader<MouseWheel>,
     mut time_step: ResMut<Time<Fixed>>,
     mut anchor: Local<UVec3>,
-    chunk_quads: Single<&ChunkQuads>,
 ) {
-    let (mut chunk, mut mesh) = chunk.into_inner();
-    let transform = transforms.get(*player_q).unwrap();
-
-    if mb.just_pressed(MouseButton::Back) {
-        println!("{:?}", chunk_quads[0]);
-    }
-
-    let [last, dst] = chunk.raycast(Ray3d::new(transform.translation, transform.forward()), 20.0);
-
+    let (mut chunk, mut changes) = chunk.into_inner();
     let (selected_entity, mut selected_visibility) = selected_q.into_inner();
+
+    let player_transform = transforms.get(*player_q).unwrap();
+    let ray = Ray3d::new(player_transform.translation, player_transform.forward());
+    let [last, dst] = chunk.raycast(ray, 20.0);
+
     let mut selected_transform = transforms.get_mut(selected_entity).unwrap();
 
     if mb.pressed(MouseButton::Middle)
         && let Some(p) = last
     {
         chunk.set(p, Some(Voxel::Liquid));
-        mesh.push_change(p);
+        changes.push(p);
     }
 
     if mb.just_pressed(MouseButton::Left)
         && let Some(p) = dst
     {
         chunk.set(p, None);
-        mesh.push_change(p);
+        changes.push(p);
     }
 
     if let Some(p) = last.or(dst) {
@@ -223,21 +201,21 @@ fn input(
                 for y in min.y..=max.y {
                     for x in min.x..=max.x {
                         chunk.set([x, y, z], Some(Voxel::Solid));
-                        mesh.push_change([x, y, z]);
+                        changes.push([x, y, z]);
                     }
                 }
             }
             for z in min.z + 1..=max.z - 1 {
                 for x in min.x..=max.x {
                     chunk.set([x, min.y, z], Some(Voxel::Solid));
-                    mesh.push_change([x, min.y, z]);
+                    changes.push([x, min.y, z]);
                 }
             }
             for z in min.z + 1..=max.z - 1 {
                 for y in min.y + 1..=max.y {
                     for x in [min.x, max.x] {
                         chunk.set([x, y, z], Some(Voxel::Solid));
-                        mesh.push_change([x, y, z]);
+                        changes.push([x, y, z]);
                     }
                 }
             }
