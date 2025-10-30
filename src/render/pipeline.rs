@@ -12,22 +12,12 @@ use bevy::{
     },
     prelude::*,
     render::{
-        Render, RenderApp, RenderStartup, RenderSystems,
-        extract_component::{ExtractComponent, ExtractComponentPlugin},
-        mesh::{RenderMesh, RenderMeshBufferInfo, allocator::MeshAllocator},
-        render_asset::RenderAssets,
-        render_phase::{
+        Render, RenderApp, RenderStartup, RenderSystems, extract_component::{ExtractComponent, ExtractComponentPlugin}, mesh::{RenderMesh, RenderMeshBufferInfo, allocator::MeshAllocator}, render_asset::RenderAssets, render_phase::{
             AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
             RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
-        },
-        render_resource::{
-            Buffer, BufferInitDescriptor, BufferUsages, PipelineCache, RenderPipelineDescriptor,
-            SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines,
-            VertexAttribute, VertexStepMode,
-        },
-        renderer::RenderDevice,
-        sync_world::MainEntity,
-        view::ExtractedView,
+        }, render_resource::{
+            AsBindGroup, BindGroup, BindGroupLayout, Buffer, BufferInitDescriptor, BufferUsages, PipelineCache, RenderPipelineDescriptor, SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines, VertexAttribute, VertexStepMode
+        }, renderer::RenderDevice, storage::GpuShaderStorageBuffer, sync_world::MainEntity, texture::{FallbackImage, GpuImage}, view::ExtractedView
     },
 };
 
@@ -38,6 +28,7 @@ pub struct QuadInstancingPlugin;
 impl Plugin for QuadInstancingPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "quad.wgsl");
+        embedded_asset!(app, "texture_array.ktx2");
 
         app.add_plugins(ExtractComponentPlugin::<ChunkQuads>::default());
         app.sub_app_mut(RenderApp)
@@ -49,6 +40,7 @@ impl Plugin for QuadInstancingPlugin {
                 (
                     queue_quads.in_set(RenderSystems::QueueMeshes),
                     prepare_instance_buffers.in_set(RenderSystems::PrepareResources),
+                    prepare_bind_group.in_set(RenderSystems::PrepareBindGroups),
                 ),
             );
     }
@@ -135,18 +127,47 @@ fn prepare_instance_buffers(
 struct CustomPipeline {
     shader: Handle<Shader>,
     mesh_pipeline: MeshPipeline,
+    tex: ArrayTextureMaterial,
+    layout: BindGroupLayout,
 }
 
 fn init_custom_pipeline(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mesh_pipeline: Res<MeshPipeline>,
+    render_device: Res<RenderDevice>,
 ) {
     commands.insert_resource(CustomPipeline {
         shader: load_embedded_asset!(&*asset_server, "quad.wgsl"),
         mesh_pipeline: mesh_pipeline.clone(),
+        tex: ArrayTextureMaterial {
+            array_texture: load_embedded_asset!(&*asset_server, "texture_array.ktx2"),
+        },
+        layout: ArrayTextureMaterial::bind_group_layout(&render_device),
     });
 }
+
+#[derive(AsBindGroup, Debug, Clone)] // used to be an Asset
+struct ArrayTextureMaterial {
+    #[texture(0, dimension = "2d_array")]
+    #[sampler(1)]
+    array_texture: Handle<Image>,
+}
+
+fn prepare_bind_group(
+    mut commands: Commands,
+    pipeline: Res<CustomPipeline>,
+    render_device: Res<RenderDevice>,
+    gpu_images: Res<RenderAssets<GpuImage>>,
+    fallback_image: Res<FallbackImage>,
+    gpu_shader_storage_buffer: Res<RenderAssets<GpuShaderStorageBuffer>>,
+) {
+    let bind_group = pipeline.tex.as_bind_group(&pipeline.layout, &render_device, &mut (gpu_images, fallback_image, gpu_shader_storage_buffer)).ok().map(|b| b.bind_group);
+    commands.insert_resource(TextureArrayBindGroup(bind_group));
+}
+
+#[derive(Resource)]
+struct TextureArrayBindGroup(Option<BindGroup>);
 
 impl SpecializedMeshPipeline for CustomPipeline {
     type Key = MeshPipelineKey;
@@ -175,7 +196,8 @@ impl SpecializedMeshPipeline for CustomPipeline {
                 },
             ],
         });
-        // descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
+        descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
+        descriptor.layout.push(self.layout.clone());
         Ok(descriptor)
     }
 }
@@ -195,6 +217,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
         SRes<RenderAssets<RenderMesh>>,
         SRes<RenderMeshInstances>,
         SRes<MeshAllocator>,
+        SRes<TextureArrayBindGroup>,
     );
     type ViewQuery = ();
     type ItemQuery = Read<InstanceBuffer>;
@@ -203,8 +226,8 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
     fn render<'w>(
         item: &P,
         _view: (),
-        instance_buffer: Option<&'w InstanceBuffer>,
-        (meshes, render_mesh_instances, mesh_allocator): SystemParamItem<'w, '_, Self::Param>,
+        item_q: Option<&'w InstanceBuffer>,
+        (meshes, render_mesh_instances, mesh_allocator, bind_group): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         // A borrow check workaround.
@@ -217,7 +240,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
         let Some(gpu_mesh) = meshes.into_inner().get(mesh_instance.mesh_asset_id) else {
             return RenderCommandResult::Skip;
         };
-        let Some(instance_buffer) = instance_buffer else {
+        let Some(instance_buffer) = item_q else {
             return RenderCommandResult::Skip;
         };
         if instance_buffer.length == 0 {
@@ -229,10 +252,14 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
             return RenderCommandResult::Skip;
         };
 
-        // info!("{}", instance_buffer.length); // reached
+        let Some(bind_group) = &bind_group.into_inner().0 else {
+            return RenderCommandResult::Skip;
+        };
 
         pass.set_vertex_buffer(0, vertex_buffer_slice.buffer.slice(..));
         pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
+
+        pass.set_bind_group(0, bind_group, &[]);
 
         match &gpu_mesh.buffer_info {
             RenderMeshBufferInfo::Indexed {

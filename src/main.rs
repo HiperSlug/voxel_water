@@ -17,9 +17,9 @@ use bevy::render::view::NoIndirectDrawing;
 use crate::chunk::{Chunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::jumpscare::JumpscarePlugin;
-use crate::render::{ChunkMesh, ChunkMeshChanges};
 use crate::render::mesher::MESHER;
 use crate::render::pipeline::{ChunkQuads, QuadInstancingPlugin};
+use crate::render::{ChunkMesh, ChunkMeshChanges};
 
 const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
 const MAX_TIMESTEP: Duration = Duration::from_secs(2);
@@ -143,7 +143,14 @@ fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>, mut tick: 
     }
 }
 
-fn render_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkMeshChanges, &mut ChunkQuads)>) {
+fn render_chunk(
+    chunk: Single<(
+        &BoxChunk,
+        &mut ChunkMesh,
+        &mut ChunkMeshChanges,
+        &mut ChunkQuads,
+    )>,
+) {
     MESHER.with_borrow_mut(|mesher| {
         let (chunk, mut mesh, mut changes, mut quads) = chunk.into_inner();
 

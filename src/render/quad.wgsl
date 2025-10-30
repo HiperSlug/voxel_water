@@ -1,5 +1,5 @@
 #import bevy_pbr::mesh_functions::{get_world_from_local, mesh_position_local_to_clip}
-#import bevy_pbr::forward_io::VertexOutput
+#import bevy_pbr::forward_io::FragmentOutput;
 
 const MASK6: u32 = (1 << 6) - 1;
 const MASK3: u32 = (1 << 3) - 1;
@@ -9,6 +9,26 @@ const HEIGHT_SHIFT: u32 = 6;
 const FACE_SHIFT: u32 = 12;
 // skip 1
 const TEXTURE_SHIFT: u32 = 16;
+
+fn instance_width(other: u32) -> u32 {
+    return (other >> WIDTH_SHIFT) & MASK6;
+}
+
+fn instance_height(other: u32) -> u32 {
+    return (other >> HEIGHT_SHIFT) & MASK6;
+}
+
+fn instance_size(other: u32) -> vec2<u32> {
+    return vec2<u32>(instance_width(other), instance_height(other));
+}
+
+fn instance_face(other: u32) -> u32 {
+    return (other >> FACE_SHIFT) & MASK3;
+}
+
+fn instance_texture(other: u32) -> u32 {
+    return other >> TEXTURE_SHIFT;
+}
 
 const POS_X: u32 = 0;
 const POS_Y: u32 = 1;
@@ -26,6 +46,16 @@ struct Vertex {
     @location(9) instance_other: u32,
 };
 
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) world_position: vec4<f32>,
+    @location(1) world_normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    @location(5) color: vec4<f32>,
+
+    @location(8) @interpolate(flat) texture: u32,
+}
+
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     let instance_size = instance_size(vertex.instance_other);
@@ -40,7 +70,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var position: vec3<f32>;
 
     var out: VertexOutput;
+
     out.uv = vertex.uv * s;
+    out.texture = instance_texture;
 
     switch(instance_face) {
         case POS_X: {
@@ -87,60 +119,61 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         world_position
     );
 
-    var color: vec3<f32>;
-
-    // TODO: texture_indexing
-    switch(instance_texture) {
-        case 0: {
-            color = vec3(0.5, 0.8, 0.8);
-        }
-        case default: {
-            color = vec3(0.8, 0.8, 0.5);
-        }
-    }
-
     // TODO: lighting
     switch(instance_face) {
         case POS_X: {
-            color *= 0.9;
+            out.color = vec4(vec3(0.9), 1.0);
         }
         case NEG_X: {
-            color *= 0.1;
+            out.color = vec4(vec3(0.1), 1.0);
         }
         case POS_Y: {
-            color *= 0.8;
+            out.color = vec4(vec3(0.8), 1.0);
         }
         case NEG_Y: {
-            color *= 0.2;
+            out.color = vec4(vec3(0.2), 1.0);
         }
         case POS_Z: {
-            color *= 0.7;
+            out.color = vec4(vec3(0.7), 1.0);
         }
         case default: { // && NEG_Z
-            color *= 0.3;
+            out.color = vec4(vec3(0.3), 1.0);
         }
     }
-    out.color = vec4(color, 1.0);
 
     return out;
 }
 
-fn instance_width(other: u32) -> u32 {
-    return (other >> WIDTH_SHIFT) & MASK6;
+#import bevy_pbr::{
+    mesh_view_bindings::view,
+    pbr_types::{PbrInput, pbr_input_new},
+    pbr_functions as fns,
+    pbr_bindings,
 }
+#import bevy_core_pipeline::tonemapping::tone_mapping
 
-fn instance_height(other: u32) -> u32 {
-    return (other >> HEIGHT_SHIFT) & MASK6;
-}
+@group(0) @binding(0) var my_array_texture: texture_2d_array<f32>;
+@group(0) @binding(1) var my_array_texture_sampler: sampler;
 
-fn instance_size(other: u32) -> vec2<u32> {
-    return vec2<u32>(instance_width(other), instance_height(other));
-}
+@fragment
+fn fragment(
+    in: VertexOutput,
+    @builtin(front_facing) is_front: bool,
+) -> FragmentOutput {
+    var pbr_input: PbrInput = pbr_input_new();
 
-fn instance_face(other: u32) -> u32 {
-    return (other >> FACE_SHIFT) & MASK3;
-}
+    pbr_input.material.base_color = textureSample(my_array_texture, my_array_texture_sampler, in.uv, in.texture);
+    pbr_input.material.base_color *= in.color;
 
-fn instance_texture(other: u32) -> u32 {
-    return other >> TEXTURE_SHIFT;
+    pbr_input.frag_coord = in.position;
+    pbr_input.world_position = in.world_position;
+    pbr_input.world_normal = in.world_normal;
+
+    pbr_input.is_orthographic = view.clip_from_view[3][3] == 1.0;
+
+    pbr_input.N = normalize(pbr_input.world_normal);
+
+    pbr_input.V = fns::calculate_view(in.world_position, pbr_input.is_orthographic);
+
+    return tone_mapping(fns::apply_pbr_lighting(pbr_input), view.color_grading);
 }
