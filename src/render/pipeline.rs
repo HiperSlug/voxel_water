@@ -31,9 +31,7 @@ use bevy::render::texture::{FallbackImage, GpuImage};
 use bevy::render::view::ExtractedView;
 use bevy::render::{Render, RenderApp, RenderStartup, RenderSystems};
 
-use crate::render::ChunkMesh;
-
-use super::Quad;
+use super::{Quad, ChunkMesh};
 
 pub struct QuadInstancingPlugin;
 
@@ -42,12 +40,12 @@ impl Plugin for QuadInstancingPlugin {
         embedded_asset!(app, "quad.wgsl");
         embedded_asset!(app, "texture_array.ktx2");
 
-        app.add_plugins((ExtractComponentPlugin::<ChunkMesh>::default(),));
+        app.add_plugins(ExtractComponentPlugin::<ChunkMesh>::default());
 
         app.sub_app_mut(RenderApp)
             .init_resource::<ArrayTextureBindGroup>()
-            .add_render_command::<Transparent3d, DrawCustom>()
-            .init_resource::<SpecializedMeshPipelines<CustomPipeline>>()
+            .add_render_command::<Transparent3d, DrawFunction>()
+            .init_resource::<SpecializedMeshPipelines<QuadInstancingPipeline>>()
             .add_systems(RenderStartup, (init_custom_pipeline, init_material))
             .add_systems(
                 Render,
@@ -61,7 +59,7 @@ impl Plugin for QuadInstancingPlugin {
 }
 
 #[derive(Resource)]
-struct CustomPipeline {
+struct QuadInstancingPipeline {
     shader: Handle<Shader>,
     mesh_pipeline: MeshPipeline,
     layout: BindGroupLayout,
@@ -73,14 +71,14 @@ fn init_custom_pipeline(
     mesh_pipeline: Res<MeshPipeline>,
     render_device: Res<RenderDevice>,
 ) {
-    commands.insert_resource(CustomPipeline {
+    commands.insert_resource(QuadInstancingPipeline {
         shader: load_embedded_asset!(&*asset_server, "quad.wgsl"),
         mesh_pipeline: mesh_pipeline.clone(),
         layout: ArrayTextureMaterial::bind_group_layout(&render_device),
     });
 }
 
-impl SpecializedMeshPipeline for CustomPipeline {
+impl SpecializedMeshPipeline for QuadInstancingPipeline {
     type Key = MeshPipelineKey;
 
     fn specialize(
@@ -113,7 +111,6 @@ impl SpecializedMeshPipeline for CustomPipeline {
     }
 }
 
-// go between to get the quad data to the render world
 #[derive(Component, ExtractComponent, Clone, Deref, DerefMut, Default)]
 pub struct ChunkQuads(Vec<Quad>);
 
@@ -133,8 +130,8 @@ impl ExtractComponent for ChunkMesh {
 
 fn queue_quads(
     transparent_3d_draw_functions: Res<DrawFunctions<Transparent3d>>,
-    custom_pipeline: Res<CustomPipeline>,
-    mut pipelines: ResMut<SpecializedMeshPipelines<CustomPipeline>>,
+    custom_pipeline: Res<QuadInstancingPipeline>,
+    mut pipelines: ResMut<SpecializedMeshPipelines<QuadInstancingPipeline>>,
     pipeline_cache: Res<PipelineCache>,
     meshes: Res<RenderAssets<RenderMesh>>,
     render_mesh_instances: Res<RenderMeshInstances>,
@@ -142,7 +139,7 @@ fn queue_quads(
     mut transparent_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
     views: Query<(&ExtractedView, &Msaa)>,
 ) {
-    let draw_custom = transparent_3d_draw_functions.read().id::<DrawCustom>();
+    let draw_custom = transparent_3d_draw_functions.read().id::<DrawFunction>();
 
     for (view, msaa) in &views {
         let Some(transparent_phase) = transparent_render_phases.get_mut(&view.retained_view_entity)
@@ -152,7 +149,7 @@ fn queue_quads(
 
         let msaa_key = MeshPipelineKey::from_msaa_samples(msaa.samples());
 
-        let view_key = msaa_key | MeshPipelineKey::from_hdr(view.hdr);
+        let view_key: MeshPipelineKey = msaa_key | MeshPipelineKey::from_hdr(view.hdr);
         let rangefinder = view.rangefinder3d();
         for (entity, main_entity) in &material_meshes {
             let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(*main_entity)
@@ -233,7 +230,7 @@ fn prepare_bind_group(
     material: Res<ArrayTextureMaterial>,
     mut bind_group: ResMut<ArrayTextureBindGroup>,
     render_device: Res<RenderDevice>,
-    pipeline: Res<CustomPipeline>,
+    pipeline: Res<QuadInstancingPipeline>,
 
     gpu_images: Res<RenderAssets<GpuImage>>,
     fallback_image: Res<FallbackImage>,
@@ -251,7 +248,7 @@ fn prepare_bind_group(
     }
 }
 
-type DrawCustom = (
+type DrawFunction = (
     SetItemPipeline,
     SetMeshViewBindGroup<0>,
     SetMeshViewBindingArrayBindGroup<1>,
