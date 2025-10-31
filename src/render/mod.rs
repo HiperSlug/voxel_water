@@ -1,5 +1,6 @@
 pub mod mesher;
 pub mod pipeline;
+pub mod texture_array;
 
 use bevy::{math::U64Vec3, prelude::*};
 use bit_iter::BitIter;

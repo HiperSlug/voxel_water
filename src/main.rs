@@ -18,7 +18,8 @@ use crate::chunk::{Chunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::jumpscare::JumpscarePlugin;
 use crate::render::mesher::MESHER;
-use crate::render::pipeline::{ChunkQuads, QuadInstancingPlugin};
+use crate::render::pipeline::{ArrayTextureMaterial, ChunkQuads, QuadInstancingPlugin};
+// use crate::render::texture_array::TextureArrayPlugin;
 use crate::render::{ChunkMesh, ChunkMeshChanges};
 
 const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
@@ -37,9 +38,11 @@ impl Plugin for Game {
             NoCameraPlayerPlugin,
             QuadInstancingPlugin,
             JumpscarePlugin,
+            // TextureArrayPlugin,
         ));
 
         embedded_asset!(app, "skybox.ktx2");
+        embedded_asset!(app, "texture_array.ktx2");
 
         app.insert_resource(Time::<Fixed>::from_hz(10.0));
 
@@ -120,6 +123,9 @@ fn setup(
         chunk,
         ChunkQuads::default(),
         NoFrustumCulling,
+        ArrayTextureMaterial {
+            array_texture: load_embedded_asset!(&*asset_server, "texture_array.ktx2"),
+        },
     ));
 }
 

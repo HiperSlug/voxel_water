@@ -1,5 +1,4 @@
 #import bevy_pbr::mesh_functions::{get_world_from_local, mesh_position_local_to_clip}
-#import bevy_pbr::forward_io::FragmentOutput;
 
 const MASK6: u32 = (1 << 6) - 1;
 const MASK3: u32 = (1 << 3) - 1;
@@ -152,14 +151,14 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 }
 #import bevy_core_pipeline::tonemapping::tone_mapping
 
-@group(0) @binding(0) var my_array_texture: texture_2d_array<f32>;
-@group(0) @binding(1) var my_array_texture_sampler: sampler;
+@group(3) @binding(0) var my_array_texture: texture_2d_array<f32>;
+@group(3) @binding(1) var my_array_texture_sampler: sampler;
 
 @fragment
 fn fragment(
     in: VertexOutput,
     @builtin(front_facing) is_front: bool,
-) -> FragmentOutput {
+) -> @location(0) vec4<f32> {
     var pbr_input: PbrInput = pbr_input_new();
 
     pbr_input.material.base_color = textureSample(my_array_texture, my_array_texture_sampler, in.uv, in.texture);
