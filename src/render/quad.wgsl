@@ -50,7 +50,6 @@ struct VertexOutput {
     @location(0) world_position: vec4<f32>,
     @location(1) world_normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
-    @location(5) color: vec4<f32>,
 
     @location(8) @interpolate(flat) texture: u32,
 }
@@ -119,26 +118,26 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     );
 
     // TODO: lighting
-    switch(instance_face) {
-        case POS_X: {
-            out.color = vec4(vec3(0.9), 1.0);
-        }
-        case NEG_X: {
-            out.color = vec4(vec3(0.1), 1.0);
-        }
-        case POS_Y: {
-            out.color = vec4(vec3(0.8), 1.0);
-        }
-        case NEG_Y: {
-            out.color = vec4(vec3(0.2), 1.0);
-        }
-        case POS_Z: {
-            out.color = vec4(vec3(0.7), 1.0);
-        }
-        case default: { // && NEG_Z
-            out.color = vec4(vec3(0.3), 1.0);
-        }
-    }
+    // switch(instance_face) {
+    //     case POS_X: {
+    //         out.color = vec4(vec3(0.9), 1.0);
+    //     }
+    //     case NEG_X: {
+    //         out.color = vec4(vec3(0.1), 1.0);
+    //     }
+    //     case POS_Y: {
+    //         out.color = vec4(vec3(0.8), 1.0);
+    //     }
+    //     case NEG_Y: {
+    //         out.color = vec4(vec3(0.2), 1.0);
+    //     }
+    //     case POS_Z: {
+    //         out.color = vec4(vec3(0.7), 1.0);
+    //     }
+    //     case default: { // && NEG_Z
+    //         out.color = vec4(vec3(0.3), 1.0);
+    //     }
+    // }
 
     return out;
 }
@@ -161,7 +160,6 @@ fn fragment(
     var pbr_input: PbrInput = pbr_input_new();
 
     pbr_input.material.base_color = textureSample(my_array_texture, my_array_texture_sampler, in.uv, in.texture);
-    pbr_input.material.base_color *= in.color;
 
     pbr_input.frag_coord = in.position;
     pbr_input.world_position = in.world_position;

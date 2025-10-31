@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // TODO: block states
 
 use bevy::prelude::*;

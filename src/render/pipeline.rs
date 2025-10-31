@@ -200,6 +200,20 @@ pub struct ArrayTextureMaterial {
     pub array_texture: Handle<Image>,
 }
 
+// fn edit_image(
+//     image_assets: ResMut<Assets<Image>>,
+//     query: Query<&ArrayTextureMaterial>,
+// ) {
+//     for mat in query {
+//         let Some(image) = image_assets.get_mut(mat.array_texture) else {
+//             continue;
+//         };
+//         let desc = image.sampler.get_or_init_descriptor();
+//         desc.address_mode_u = ImageAddressMode::Repeat;
+//         desc.address_mode_v = ImageAddressMode::Repeat;
+//     }
+// }
+
 fn prepare_bind_group(
     mut commands: Commands,
     query: Single<(Entity, &ArrayTextureMaterial)>,
@@ -219,6 +233,7 @@ fn prepare_bind_group(
         )
         .ok()
         .map(|b| b.bind_group);
+
     commands
         .entity(entity)
         .insert(TextureArrayBindGroup(bind_group));
@@ -274,12 +289,12 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
         let Some((bind_group, instance_buffer)) = item_q else {
             return RenderCommandResult::Skip;
         };
-        // info!("marker2 {}", instance_buffer.length); 
+        // info!("marker2 {}", instance_buffer.length);
 
         if instance_buffer.length == 0 {
             return RenderCommandResult::Skip;
         }
-        // info!("marker2.1 {bind_group:?}"); 
+        // info!("marker2.1 {bind_group:?}");
         let Some(bind_group) = &bind_group.0 else {
             return RenderCommandResult::Skip;
         };

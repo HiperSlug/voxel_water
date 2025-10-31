@@ -410,7 +410,7 @@ impl Mesher {
                     for x in BitIter::from(remesh.x).map(|x| origin.x + x as i32) {
                         let dst_range = key_range(&quads, |q| q.pos.x, x);
 
-                        let src_end = self.quads.partition_point(|q| q.pos.x < x);
+                        let src_end = self.quads.partition_point(|q| q.pos.x <= x);
                         let replace_with = self.quads[src_start..src_end].iter().copied();
                         src_start = src_end;
 
@@ -432,7 +432,7 @@ impl Mesher {
                     for y in BitIter::from(remesh.y).map(|y| origin.y + y as i32) {
                         let dst_range = key_range(&quads, |q| q.pos.y, y);
 
-                        let src_end = self.quads.partition_point(|q| q.pos.y < y);
+                        let src_end = self.quads.partition_point(|q| q.pos.y <= y);
                         let replace_with = self.quads[src_start..src_end].iter().copied();
                         src_start = src_end;
 
@@ -454,7 +454,7 @@ impl Mesher {
                     for z in BitIter::from(remesh.z).map(|z| origin.z + z as i32) {
                         let dst_range = key_range(&quads, |q| q.pos.z, z);
 
-                        let src_end = self.quads.partition_point(|q| q.pos.z < z);
+                        let src_end = self.quads.partition_point(|q| q.pos.z <= z);
                         let replace_with = self.quads[src_start..src_end].iter().copied();
                         src_start = src_end;
 

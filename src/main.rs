@@ -10,6 +10,7 @@ use std::time::Duration;
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::camera::visibility::NoFrustumCulling;
 use bevy::core_pipeline::Skybox;
+use bevy::image::{ImageAddressMode, ImageLoaderSettings};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
@@ -125,7 +126,15 @@ fn setup(
         ChunkQuads::default(),
         NoFrustumCulling,
         ArrayTextureMaterial {
-            array_texture: load_embedded_asset!(&*asset_server, "texture_array.ktx2"),
+            array_texture: load_embedded_asset!(
+                &*asset_server,
+                "texture_array.ktx2",
+                |settings: &mut ImageLoaderSettings| {
+                    let desc = settings.sampler.get_or_init_descriptor();
+                    desc.address_mode_u = ImageAddressMode::Repeat;
+                    desc.address_mode_v = ImageAddressMode::Repeat;
+                }
+            ),
         },
     ));
 }
