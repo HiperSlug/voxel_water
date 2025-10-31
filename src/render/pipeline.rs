@@ -42,7 +42,10 @@ impl Plugin for QuadInstancingPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "quad.wgsl");
 
-        app.add_plugins(ExtractComponentPlugin::<ChunkQuads>::default());
+        app.add_plugins((
+            ExtractComponentPlugin::<ChunkQuads>::default(),
+            ExtractComponentPlugin::<ArrayTextureMaterial>::default(),
+        ));
 
         app.sub_app_mut(RenderApp)
             .add_render_command::<Transparent3d, DrawCustom>()
@@ -190,7 +193,7 @@ fn prepare_instance_buffers(
     }
 }
 
-#[derive(Component, AsBindGroup, Debug, Clone)]
+#[derive(Component, ExtractComponent, AsBindGroup, Debug, Clone)]
 pub struct ArrayTextureMaterial {
     #[texture(0, dimension = "2d_array")]
     #[sampler(1)]
@@ -221,7 +224,7 @@ fn prepare_bind_group(
         .insert(TextureArrayBindGroup(bind_group));
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 struct TextureArrayBindGroup(Option<BindGroup>);
 
 type DrawCustom = (
@@ -255,31 +258,32 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
     ) -> RenderCommandResult {
         // A borrow check workaround.
         let mesh_allocator = mesh_allocator.into_inner();
-        info!("marker1");
+        // info!("marker1");
 
         let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(item.main_entity())
         else {
             return RenderCommandResult::Skip;
         };
-        info!("marker1.1");
+        // info!("marker1.1");
         let Some(gpu_mesh) = meshes.into_inner().get(mesh_instance.mesh_asset_id) else {
             return RenderCommandResult::Skip;
         };
 
-        info!("marker1.2");
+        // info!("marker1.2");
 
         let Some((bind_group, instance_buffer)) = item_q else {
             return RenderCommandResult::Skip;
         };
-        info!("marker2");
+        // info!("marker2 {}", instance_buffer.length); 
 
         if instance_buffer.length == 0 {
             return RenderCommandResult::Skip;
         }
+        // info!("marker2.1 {bind_group:?}"); 
         let Some(bind_group) = &bind_group.0 else {
             return RenderCommandResult::Skip;
         };
-        info!("marker3");
+        // info!("marker3"); // UNREACHED
 
         let Some(vertex_buffer_slice) =
             mesh_allocator.mesh_vertex_slice(&mesh_instance.mesh_asset_id)
@@ -287,7 +291,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
             return RenderCommandResult::Skip;
         };
 
-        info!("marker4");
+        // info!("marker4");
 
         pass.set_vertex_buffer(0, vertex_buffer_slice.buffer.slice(..));
         pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
