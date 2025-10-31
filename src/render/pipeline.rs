@@ -1,42 +1,35 @@
-use bevy::{
-    asset::{embedded_asset, load_embedded_asset},
-    core_pipeline::core_3d::Transparent3d,
-    ecs::{
-        query::QueryItem,
-        system::{
-            SystemParamItem,
-            lifetimeless::{Read, SRes},
-        },
-    },
-    image::{ImageAddressMode, ImageLoaderSettings},
-    mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat},
-    pbr::{
-        MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
-        SetMeshViewBindingArrayBindGroup,
-    },
-    prelude::*,
-    render::{
-        Render, RenderApp, RenderStartup, RenderSystems,
-        extract_component::{ExtractComponent, ExtractComponentPlugin},
-        mesh::{RenderMesh, RenderMeshBufferInfo, allocator::MeshAllocator},
-        render_asset::RenderAssets,
-        render_phase::{
-            AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
-            RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
-        },
-        render_resource::{
-            AsBindGroup, BindGroup, BindGroupLayout, Buffer, BufferInitDescriptor, BufferUsages,
-            PipelineCache, RenderPipelineDescriptor, SpecializedMeshPipeline,
-            SpecializedMeshPipelineError, SpecializedMeshPipelines, VertexAttribute,
-            VertexStepMode,
-        },
-        renderer::RenderDevice,
-        storage::GpuShaderStorageBuffer,
-        sync_world::MainEntity,
-        texture::{FallbackImage, GpuImage},
-        view::ExtractedView,
-    },
+use bevy::asset::{embedded_asset, load_embedded_asset};
+use bevy::core_pipeline::core_3d::Transparent3d;
+use bevy::ecs::query::QueryItem;
+use bevy::ecs::system::{
+    SystemParamItem,
+    lifetimeless::{Read, SRes},
 };
+use bevy::image::{ImageAddressMode, ImageLoaderSettings};
+use bevy::mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat};
+use bevy::pbr::{
+    MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
+    SetMeshViewBindingArrayBindGroup,
+};
+use bevy::prelude::*;
+use bevy::render::extract_component::{ExtractComponent, ExtractComponentPlugin};
+use bevy::render::mesh::{RenderMesh, RenderMeshBufferInfo, allocator::MeshAllocator};
+use bevy::render::render_asset::RenderAssets;
+use bevy::render::render_phase::{
+    AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
+    RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
+};
+use bevy::render::render_resource::{
+    AsBindGroup, BindGroup, BindGroupLayout, Buffer, BufferInitDescriptor, BufferUsages,
+    PipelineCache, RenderPipelineDescriptor, SpecializedMeshPipeline, SpecializedMeshPipelineError,
+    SpecializedMeshPipelines, VertexAttribute, VertexStepMode,
+};
+use bevy::render::renderer::RenderDevice;
+use bevy::render::storage::GpuShaderStorageBuffer;
+use bevy::render::sync_world::MainEntity;
+use bevy::render::texture::{FallbackImage, GpuImage};
+use bevy::render::view::ExtractedView;
+use bevy::render::{Render, RenderApp, RenderStartup, RenderSystems};
 
 use crate::render::ChunkMesh;
 

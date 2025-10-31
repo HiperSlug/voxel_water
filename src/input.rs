@@ -1,14 +1,10 @@
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
+use bevy::prelude::*;
 use std::time::Duration;
 
-#[cfg(not(target_arch = "wasm32"))]
-use bevy::input::mouse::MouseScrollUnit;
-use bevy::{input::mouse::MouseWheel, prelude::*};
-
-use crate::{
-    chunk::{BoxChunk, Voxel},
-    flycam::FlyCam,
-    render::ChunkMeshChanges,
-};
+use crate::chunk::{BoxChunk, Voxel};
+use crate::flycam::FlyCam;
+use crate::render::ChunkMeshChanges;
 
 const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
 const MAX_TIMESTEP: Duration = Duration::from_secs(2);

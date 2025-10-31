@@ -1,7 +1,5 @@
-use bevy::{
-    asset::{embedded_asset, load_embedded_asset},
-    prelude::*,
-};
+use bevy::asset::{embedded_asset, load_embedded_asset};
+use bevy::prelude::*;
 use bevy_tweening::{Lens, Tween, TweenAnim, TweeningPlugin};
 use rand::{rng, seq::IndexedRandom};
 use std::time::Duration;

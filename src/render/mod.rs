@@ -83,7 +83,7 @@ impl ChunkMeshChanges {
     pub fn clear(&mut self) {
         self.0 = U64Vec3::ZERO
     }
-    
+
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.0 == U64Vec3::ZERO

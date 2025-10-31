@@ -2,7 +2,8 @@
 
 use bevy::prelude::*;
 use enum_map::{EnumMap, enum_map};
-use std::{cell::RefCell, ops::Range};
+use std::cell::RefCell;
+use std::ops::Range;
 
 use super::*;
 

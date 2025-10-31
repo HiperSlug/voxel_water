@@ -5,10 +5,8 @@
 use bevy::prelude::*;
 use enum_map::{EnumMap, enum_map};
 use nonmax::NonMaxU16;
-use std::{
-    ops::{Index, IndexMut},
-    sync::LazyLock,
-};
+use std::ops::{Index, IndexMut};
+use std::sync::LazyLock;
 
 use crate::render::Face;
 

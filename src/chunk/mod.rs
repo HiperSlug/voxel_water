@@ -2,7 +2,8 @@ pub mod index;
 mod liquid_tick;
 mod masks;
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::platform::collections::HashMap;
+use bevy::prelude::*;
 
 pub use index::*;
 pub use masks::*;
