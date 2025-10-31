@@ -1,10 +1,14 @@
 use bevy::{
     asset::{embedded_asset, load_embedded_asset},
     core_pipeline::core_3d::Transparent3d,
-    ecs::system::{
-        SystemParamItem,
-        lifetimeless::{Read, SRes},
+    ecs::{
+        query::QueryItem,
+        system::{
+            SystemParamItem,
+            lifetimeless::{Read, SRes},
+        },
     },
+    image::{ImageAddressMode, ImageLoaderSettings},
     mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat},
     pbr::{
         MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
@@ -34,6 +38,8 @@ use bevy::{
     },
 };
 
+use crate::render::ChunkMesh;
+
 use super::Quad;
 
 pub struct QuadInstancingPlugin;
@@ -41,16 +47,15 @@ pub struct QuadInstancingPlugin;
 impl Plugin for QuadInstancingPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "quad.wgsl");
+        embedded_asset!(app, "texture_array.ktx2");
 
-        app.add_plugins((
-            ExtractComponentPlugin::<ChunkQuads>::default(),
-            ExtractComponentPlugin::<ArrayTextureMaterial>::default(),
-        ));
+        app.add_plugins((ExtractComponentPlugin::<ChunkQuads>::default(),));
 
         app.sub_app_mut(RenderApp)
+            .init_resource::<ArrayTextureBindGroup>()
             .add_render_command::<Transparent3d, DrawCustom>()
             .init_resource::<SpecializedMeshPipelines<CustomPipeline>>()
-            .add_systems(RenderStartup, init_custom_pipeline)
+            .add_systems(RenderStartup, (init_custom_pipeline, init_material))
             .add_systems(
                 Render,
                 (
@@ -118,6 +123,20 @@ impl SpecializedMeshPipeline for CustomPipeline {
 // go between to get the quad data to the render world
 #[derive(Component, ExtractComponent, Clone, Deref, DerefMut, Default)]
 pub struct ChunkQuads(Vec<Quad>);
+
+impl ExtractComponent for ChunkMesh {
+    type Out = ChunkQuads;
+    type QueryData = &'static Self;
+    type QueryFilter = ();
+
+    fn extract_component(mesh: QueryItem<'_, '_, Self::QueryData>) -> Option<Self::Out> {
+        let mut out = ChunkQuads(Vec::with_capacity(mesh.len()));
+        for (i, q) in mesh.quads().enumerate() {
+            out[i] = *q;
+        }
+        Some(out)
+    }
+}
 
 fn queue_quads(
     transparent_3d_draw_functions: Res<DrawFunctions<Transparent3d>>,
@@ -193,30 +212,33 @@ fn prepare_instance_buffers(
     }
 }
 
-#[derive(Component, ExtractComponent, AsBindGroup, Debug, Clone)]
+#[derive(Resource, AsBindGroup, Debug, Clone)]
 pub struct ArrayTextureMaterial {
     #[texture(0, dimension = "2d_array")]
     #[sampler(1)]
     pub array_texture: Handle<Image>,
 }
 
-// fn edit_image(
-//     image_assets: ResMut<Assets<Image>>,
-//     query: Query<&ArrayTextureMaterial>,
-// ) {
-//     for mat in query {
-//         let Some(image) = image_assets.get_mut(mat.array_texture) else {
-//             continue;
-//         };
-//         let desc = image.sampler.get_or_init_descriptor();
-//         desc.address_mode_u = ImageAddressMode::Repeat;
-//         desc.address_mode_v = ImageAddressMode::Repeat;
-//     }
-// }
+fn init_material(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.insert_resource(ArrayTextureMaterial {
+        array_texture: load_embedded_asset!(
+            &*asset_server,
+            "texture_array.ktx2",
+            |settings: &mut ImageLoaderSettings| {
+                let desc = settings.sampler.get_or_init_descriptor();
+                desc.address_mode_u = ImageAddressMode::Repeat;
+                desc.address_mode_v = ImageAddressMode::Repeat;
+            }
+        ),
+    });
+}
+
+#[derive(Resource, Default)]
+pub struct ArrayTextureBindGroup(Option<BindGroup>);
 
 fn prepare_bind_group(
-    mut commands: Commands,
-    query: Single<(Entity, &ArrayTextureMaterial)>,
+    material: Res<ArrayTextureMaterial>,
+    mut bind_group: ResMut<ArrayTextureBindGroup>,
     render_device: Res<RenderDevice>,
     pipeline: Res<CustomPipeline>,
 
@@ -224,30 +246,23 @@ fn prepare_bind_group(
     fallback_image: Res<FallbackImage>,
     gpu_shader_storage_buffer: Res<RenderAssets<GpuShaderStorageBuffer>>,
 ) {
-    let (entity, material) = query.into_inner();
-    let bind_group = material
-        .as_bind_group(
-            &pipeline.layout,
-            &render_device,
-            &mut (gpu_images, fallback_image, gpu_shader_storage_buffer),
-        )
-        .ok()
-        .map(|b| b.bind_group);
-
-    commands
-        .entity(entity)
-        .insert(TextureArrayBindGroup(bind_group));
+    if let None = bind_group.0 {
+        bind_group.0 = material
+            .as_bind_group(
+                &pipeline.layout,
+                &render_device,
+                &mut (gpu_images, fallback_image, gpu_shader_storage_buffer),
+            )
+            .ok()
+            .map(|b| b.bind_group);
+    }
 }
-
-#[derive(Component, Debug)]
-struct TextureArrayBindGroup(Option<BindGroup>);
 
 type DrawCustom = (
     SetItemPipeline,
     SetMeshViewBindGroup<0>,
     SetMeshViewBindingArrayBindGroup<1>,
     SetMeshBindGroup<2>,
-    // SetMaterialBindGroup<3>, // this was returning RenderCommandResult::Skip
     DrawMeshInstanced,
 );
 
@@ -258,55 +273,51 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
         SRes<RenderAssets<RenderMesh>>,
         SRes<RenderMeshInstances>,
         SRes<MeshAllocator>,
+        SRes<ArrayTextureBindGroup>,
     );
     type ViewQuery = ();
-    type ItemQuery = (Read<TextureArrayBindGroup>, Read<InstanceBuffer>);
+    type ItemQuery = Read<InstanceBuffer>;
 
     #[inline]
     fn render<'w>(
         // It seems this function is never getting called.
         item: &P,
         _view: (),
-        item_q: Option<(&'w TextureArrayBindGroup, &'w InstanceBuffer)>,
-        (meshes, render_mesh_instances, mesh_allocator): SystemParamItem<'w, '_, Self::Param>,
+        instance_buffer: Option<&'w InstanceBuffer>,
+        (meshes, render_mesh_instances, mesh_allocator, bind_group): SystemParamItem<
+            'w,
+            '_,
+            Self::Param,
+        >,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         // A borrow check workaround.
         let mesh_allocator = mesh_allocator.into_inner();
-        // info!("marker1");
 
         let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(item.main_entity())
         else {
             return RenderCommandResult::Skip;
         };
-        // info!("marker1.1");
         let Some(gpu_mesh) = meshes.into_inner().get(mesh_instance.mesh_asset_id) else {
             return RenderCommandResult::Skip;
         };
 
-        // info!("marker1.2");
-
-        let Some((bind_group, instance_buffer)) = item_q else {
+        let Some(instance_buffer) = instance_buffer else {
             return RenderCommandResult::Skip;
         };
-        // info!("marker2 {}", instance_buffer.length);
 
         if instance_buffer.length == 0 {
             return RenderCommandResult::Skip;
         }
-        // info!("marker2.1 {bind_group:?}");
-        let Some(bind_group) = &bind_group.0 else {
+        let Some(bind_group) = &bind_group.into_inner().0 else {
             return RenderCommandResult::Skip;
         };
-        // info!("marker3"); // UNREACHED
 
         let Some(vertex_buffer_slice) =
             mesh_allocator.mesh_vertex_slice(&mesh_instance.mesh_asset_id)
         else {
             return RenderCommandResult::Skip;
         };
-
-        // info!("marker4");
 
         pass.set_vertex_buffer(0, vertex_buffer_slice.buffer.slice(..));
         pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));

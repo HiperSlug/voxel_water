@@ -1,6 +1,5 @@
 pub mod mesher;
 pub mod pipeline;
-pub mod texture_array;
 
 use bevy::{math::U64Vec3, prelude::*};
 use bit_iter::BitIter;
@@ -64,10 +63,33 @@ impl Face {
 #[derive(Component, Deref, DerefMut)]
 pub struct ChunkMesh(pub EnumMap<Face, Vec<Quad>>);
 
+impl ChunkMesh {
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.values().map(|vec| vec.len()).sum()
+    }
+
+    #[inline]
+    pub fn quads(&self) -> impl Iterator<Item = &Quad> {
+        self.0.values().flat_map(|v| v.iter())
+    }
+}
+
 #[derive(Component, Default, Clone, Copy)]
 pub struct ChunkMeshChanges(pub U64Vec3);
 
 impl ChunkMeshChanges {
+    #[inline]
+    pub fn clear(&mut self) {
+        self.0 = U64Vec3::ZERO
+    }
+    
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0 == U64Vec3::ZERO
+    }
+
+    #[inline]
     pub fn push(&mut self, p: impl Index3d) {
         let [x, y, z] = p.xyz();
         self.0.x |= 1 << x;

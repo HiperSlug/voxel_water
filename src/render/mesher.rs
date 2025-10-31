@@ -2,7 +2,7 @@
 
 use bevy::prelude::*;
 use enum_map::{EnumMap, enum_map};
-use std::{cell::RefCell, mem::take, ops::Range};
+use std::{cell::RefCell, ops::Range};
 
 use super::*;
 
@@ -85,7 +85,7 @@ impl InnerMesher {
         for f in Face::ALL {
             let visible_mask = &mut self.visible_masks[f];
 
-            let mut f = |y: u32, z: u32, xs: u64| {
+            let mut handler = |y: u32, z: u32, xs: u64| {
                 let i_2d = [y, z].i_2d();
 
                 let some = some_mask[i_2d];
@@ -109,19 +109,19 @@ impl InnerMesher {
 
             for z in BitIter::from(remesh.z).map(u32) {
                 for y in 1..LEN_U32 - 1 {
-                    f(y, z, !0)
+                    handler(y, z, !0)
                 }
             }
 
             for z in BitIter::from(other_z).map(u32) {
                 for y in BitIter::from(remesh.y).map(u32) {
-                    f(y, z, !0)
+                    handler(y, z, !0)
                 }
             }
 
             for z in BitIter::from(other_z).map(u32) {
                 for y in BitIter::from(other_y).map(u32) {
-                    f(y, z, remesh.x)
+                    handler(y, z, remesh.x)
                 }
             }
         }
@@ -374,8 +374,7 @@ impl InnerMesher {
         }
     }
 
-    pub fn mesh(&mut self, chunk: &Chunk, chunk_pos: IVec3) -> ChunkMesh {
-        let origin = chunk_pos * LEN as i32;
+    pub fn mesh(&mut self, chunk: &Chunk, origin: IVec3) -> ChunkMesh {
         self.build_all_visible_masks(chunk);
         ChunkMesh(self.merged_quads(chunk, origin))
     }
@@ -385,17 +384,11 @@ impl Mesher {
     pub fn remesh(
         &mut self,
         chunk: &Chunk,
-        chunk_pos: IVec3,
+        origin: IVec3,
         mesh: &mut ChunkMesh,
-        changes: &mut ChunkMeshChanges,
+        changes: ChunkMeshChanges,
     ) {
-        let origin = chunk_pos * LEN as i32;
-
-        let remesh = take(&mut changes.0).map(|x| (x | x << 1 | x >> 1) & !PAD_MASK);
-
-        if remesh == U64Vec3::ZERO {
-            return;
-        }
+        let remesh = changes.0.map(|x| (x | x << 1 | x >> 1) & !PAD_MASK);
 
         self.build_visible_masks(chunk, remesh);
 
@@ -468,6 +461,7 @@ impl Mesher {
     }
 }
 
+#[inline]
 fn key_range(slice: &[Quad], key: impl Fn(&Quad) -> i32, k: i32) -> Range<usize> {
     let start = slice.partition_point(|q| key(q) < k);
     let len = slice[start..].partition_point(|q| key(q) == k);
@@ -475,6 +469,7 @@ fn key_range(slice: &[Quad], key: impl Fn(&Quad) -> i32, k: i32) -> Range<usize>
     start..end
 }
 
+#[inline]
 fn u32(usize: usize) -> u32 {
     usize as u32
 }

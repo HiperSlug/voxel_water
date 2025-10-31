@@ -42,19 +42,8 @@ struct Ghost(Timer);
 
 fn jumpscare(mut commands: Commands, assets: Res<Assets>, input: Res<ButtonInput<KeyCode>>) {
     if input.just_pressed(KeyCode::Escape) {
-        let boo = assets.boos.choose(&mut rng()).unwrap().clone();
-        commands.spawn((AudioPlayer(boo), PlaybackSettings::DESPAWN));
-
-        let tween = Tween::new(
-            EaseFunction::ElasticOut,
-            Duration::from_secs(1),
-            UiScaleLens {
-                start: Vec2::ZERO,
-                end: Vec2::splat(350.),
-            },
-        );
-
         commands.spawn((
+            AudioPlayer(assets.boos.choose(&mut rng()).unwrap().clone()),
             Node {
                 align_self: AlignSelf::Center,
                 justify_self: JustifySelf::Center,
@@ -63,9 +52,24 @@ fn jumpscare(mut commands: Commands, assets: Res<Assets>, input: Res<ButtonInput
                 ..default()
             },
             ImageNode::new(assets.ghost.clone()),
-            TweenAnim::new(tween),
-            Ghost(Timer::from_seconds(1.5, TimerMode::Once)),
+            TweenAnim::new(Tween::new(
+                EaseFunction::ElasticOut,
+                Duration::from_secs(1),
+                UiScaleLens {
+                    start: Vec2::ZERO,
+                    end: Vec2::splat(350.),
+                },
+            )),
+            Ghost(Timer::from_seconds(1.2, TimerMode::Once)),
         ));
+    }
+}
+
+fn despawn_ghosts(mut commands: Commands, time: Res<Time>, ghosts: Query<(Entity, &mut Ghost)>) {
+    for (entity, mut ghost) in ghosts {
+        if ghost.0.tick(time.delta()).is_finished() {
+            commands.entity(entity).despawn();
+        }
     }
 }
 
@@ -78,13 +82,5 @@ impl Lens<Node> for UiScaleLens {
     fn lerp(&mut self, mut target: Mut<Node>, ratio: f32) {
         target.width = Val::Px(self.start.x + (self.end.x - self.start.x) * ratio);
         target.height = Val::Px(self.start.y + (self.end.y - self.start.y) * ratio);
-    }
-}
-
-fn despawn_ghosts(mut commands: Commands, time: Res<Time>, ghosts: Query<(Entity, &mut Ghost)>) {
-    for (entity, mut ghost) in ghosts {
-        if ghost.0.tick(time.delta()).is_finished() {
-            commands.entity(entity).despawn();
-        }
     }
 }

@@ -117,28 +117,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         world_position
     );
 
-    // TODO: lighting
-    // switch(instance_face) {
-    //     case POS_X: {
-    //         out.color = vec4(vec3(0.9), 1.0);
-    //     }
-    //     case NEG_X: {
-    //         out.color = vec4(vec3(0.1), 1.0);
-    //     }
-    //     case POS_Y: {
-    //         out.color = vec4(vec3(0.8), 1.0);
-    //     }
-    //     case NEG_Y: {
-    //         out.color = vec4(vec3(0.2), 1.0);
-    //     }
-    //     case POS_Z: {
-    //         out.color = vec4(vec3(0.7), 1.0);
-    //     }
-    //     case default: { // && NEG_Z
-    //         out.color = vec4(vec3(0.3), 1.0);
-    //     }
-    // }
-
     return out;
 }
 

@@ -1,31 +1,26 @@
 mod block;
 mod chunk;
 mod flycam;
+mod input;
 mod jumpscare;
 mod render;
 
 use std::f32::consts::PI;
-use std::time::Duration;
 
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::camera::visibility::NoFrustumCulling;
 use bevy::core_pipeline::Skybox;
-use bevy::image::{ImageAddressMode, ImageLoaderSettings};
-use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
 
-use crate::chunk::{Chunk, Voxel};
+use crate::chunk::{BoxChunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
+use crate::input::{GameInputPlugin, SelectedMarker};
 use crate::jumpscare::JumpscarePlugin;
 use crate::render::mesher::MESHER;
-use crate::render::pipeline::{ArrayTextureMaterial, ChunkQuads, QuadInstancingPlugin};
-// use crate::render::texture_array::TextureArrayPlugin;
+use crate::render::pipeline::QuadInstancingPlugin;
 use crate::render::{ChunkMesh, ChunkMeshChanges};
-
-const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
-const MAX_TIMESTEP: Duration = Duration::from_secs(2);
 
 fn main() {
     App::new().add_plugins(Game).run();
@@ -38,24 +33,20 @@ impl Plugin for Game {
         app.add_plugins((
             DefaultPlugins,
             NoCameraPlayerPlugin,
+            GameInputPlugin,
             QuadInstancingPlugin,
             JumpscarePlugin,
-            // TextureArrayPlugin,
         ));
 
         embedded_asset!(app, "skybox.ktx2");
-        embedded_asset!(app, "texture_array.ktx2");
 
         app.insert_resource(Time::<Fixed>::from_hz(10.0));
 
         app.add_systems(Startup, setup)
             .add_systems(FixedUpdate, liquid_tick)
-            .add_systems(Update, (render_chunk, rotate_skybox, input));
+            .add_systems(Update, remesh_chunk);
     }
 }
-
-#[derive(Component, Deref, DerefMut, Default)]
-struct BoxChunk(Box<Chunk>);
 
 fn setup(
     mut commands: Commands,
@@ -77,8 +68,8 @@ fn setup(
     // player
     commands.spawn((
         Transform {
-            translation: vec3(30.0, 85.0, -10.0),
-            rotation: Quat::from_array([0.0, 0.8, 0.5, 0.0]).normalize(),
+            translation: vec3(32.0, 72.0, -8.0),
+            rotation: Quat::from_rotation_x(PI / 4.),
             ..default()
         },
         Skybox {
@@ -88,214 +79,78 @@ fn setup(
         },
         Camera3d::default(),
         FlyCam,
-        NoIndirectDrawing, // do I need this
+        NoIndirectDrawing, // TODO: what does this do?
     ));
 
     // chunk aabb
     commands.spawn((
-        Mesh3d(meshes.add(cuboid_wireframe_mesh(Vec3::splat(62.0)))),
-        MeshMaterial3d(materials.add(Color::srgba(1.0, 1.0, 1.0, 1.0))),
+        Mesh3d(meshes.add(cube_wireframe_mesh(62.))),
+        MeshMaterial3d(materials.add(Color::WHITE)),
         Transform::from_xyz(32.0, 32.0, 32.0),
     ));
 
     // selected aabb
     commands.spawn((
-        Mesh3d(meshes.add(Cuboid::from_length(1.0))),
-        MeshMaterial3d(materials.add(Color::srgba(0.5, 0., 0., 0.5))),
-        Transform::default(),
+        Mesh3d(meshes.add(Cuboid::from_length(1.))),
+        MeshMaterial3d(materials.add(Color::srgba(0.5, 0., 0., 0.25))),
         Visibility::Hidden,
         SelectedMarker,
     ));
 
     // chunk
-    let quad = Rectangle::from_length(1.0)
-        .mesh()
-        .build()
-        .with_inserted_attribute(
-            Mesh::ATTRIBUTE_COLOR,
-            vec![Color::WHITE.to_srgba().to_vec4(); 4],
-        );
     let mut chunk = BoxChunk::default();
     chunk.fill_padding(Some(Voxel::Solid));
     let mesh = MESHER.with_borrow_mut(|mesher| mesher.mesh(&chunk, IVec3::ZERO));
     commands.spawn((
-        Mesh3d(meshes.add(quad)),
+        chunk,
         mesh,
         ChunkMeshChanges::default(),
-        chunk,
-        ChunkQuads::default(),
+        Mesh3d(meshes.add(Rectangle::from_length(1.))),
         NoFrustumCulling,
-        ArrayTextureMaterial {
-            array_texture: load_embedded_asset!(
-                &*asset_server,
-                "texture_array.ktx2",
-                |settings: &mut ImageLoaderSettings| {
-                    let desc = settings.sampler.get_or_init_descriptor();
-                    desc.address_mode_u = ImageAddressMode::Repeat;
-                    desc.address_mode_v = ImageAddressMode::Repeat;
-                }
-            ),
-        },
     ));
-}
-
-fn rotate_skybox(time: Res<Time>, mut skybox: Single<&mut Skybox>) {
-    const ANGULAR_VEL: f32 = -0.003;
-    let delta = ANGULAR_VEL * time.delta_secs();
-    skybox.rotation *= Quat::from_rotation_y(delta);
 }
 
 fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>, mut tick: Local<u64>) {
     let (mut chunk, mut changes) = chunk.into_inner();
 
     chunk.liquid_tick(*tick);
-    *tick += 1;
-
-    chunk.front_masks = chunk.back_masks.clone();
+    chunk.copy_back_to_front();
 
     for (dst, src) in chunk.dst_to_src.drain() {
         changes.push(dst);
         changes.push(src);
     }
+
+    *tick += 1;
 }
 
-fn render_chunk(
-    chunk: Single<(
-        &BoxChunk,
-        &mut ChunkMesh,
-        &mut ChunkMeshChanges,
-        &mut ChunkQuads,
-    )>,
-) {
+fn remesh_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkMeshChanges)>) {
+    let (chunk, mut mesh, mut changes) = chunk.into_inner();
+
+    if changes.is_empty() {
+        return;
+    }
+
     MESHER.with_borrow_mut(|mesher| {
-        let (chunk, mut mesh, mut changes, mut quads) = chunk.into_inner();
+        mesher.remesh(chunk, IVec3::ZERO, &mut mesh, *changes);
+    });
 
-        mesher.remesh(chunk, IVec3::ZERO, &mut mesh, &mut changes);
-
-        quads.clear();
-        for vec in mesh.values() {
-            quads.extend(vec);
-        }
-    })
-}
-
-#[derive(Component)]
-struct SelectedMarker;
-
-fn input(
-    mut transforms: Query<&mut Transform>,
-    selected_q: Single<(Entity, &mut Visibility), With<SelectedMarker>>,
-    player_q: Single<Entity, With<FlyCam>>,
-    mb: Res<ButtonInput<MouseButton>>,
-    chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>,
-    mut scroll: MessageReader<MouseWheel>,
-    mut time_step: ResMut<Time<Fixed>>,
-    mut anchor: Local<UVec3>,
-) {
-    let (mut chunk, mut changes) = chunk.into_inner();
-    let (selected_entity, mut selected_visibility) = selected_q.into_inner();
-
-    let player_transform = transforms.get(*player_q).unwrap();
-    let ray = Ray3d::new(player_transform.translation, player_transform.forward());
-    let [last, dst] = chunk.raycast(ray, 20.0);
-
-    let mut selected_transform = transforms.get_mut(selected_entity).unwrap();
-
-    if mb.pressed(MouseButton::Middle)
-        && let Some(p) = last
-    {
-        chunk.set(p, Some(Voxel::Liquid));
-        changes.push(p);
-    }
-
-    if mb.just_pressed(MouseButton::Left)
-        && let Some(p) = dst
-    {
-        chunk.set(p, None);
-        changes.push(p);
-    }
-
-    if let Some(p) = last.or(dst) {
-        if mb.just_released(MouseButton::Right) {
-            let min = p.min(*anchor);
-            let max = p.max(*anchor);
-
-            for z in [min.z, max.z] {
-                for y in min.y..=max.y {
-                    for x in min.x..=max.x {
-                        chunk.set([x, y, z], Some(Voxel::Solid));
-                        changes.push([x, y, z]);
-                    }
-                }
-            }
-            for z in min.z + 1..=max.z - 1 {
-                for x in min.x..=max.x {
-                    chunk.set([x, min.y, z], Some(Voxel::Solid));
-                    changes.push([x, min.y, z]);
-                }
-            }
-            for z in min.z + 1..=max.z - 1 {
-                for y in min.y + 1..=max.y {
-                    for x in [min.x, max.x] {
-                        chunk.set([x, y, z], Some(Voxel::Solid));
-                        changes.push([x, y, z]);
-                    }
-                }
-            }
-        }
-
-        if !mb.pressed(MouseButton::Right) {
-            *anchor = p;
-        }
-
-        let min = p.min(*anchor);
-        let max = p.max(*anchor);
-
-        let scale = (max + UVec3::ONE).as_vec3() - min.as_vec3();
-        let translation = min.as_vec3() + scale / 2.;
-
-        selected_transform.scale = scale;
-        selected_transform.translation = translation;
-
-        *selected_visibility = Visibility::Visible;
-    } else {
-        *selected_visibility = Visibility::Hidden;
-    }
-
-    for event in scroll.read() {
-        #[cfg(not(target_arch = "wasm32"))]
-        let scroll = match event.unit {
-            MouseScrollUnit::Line => event.y / 16.,
-            MouseScrollUnit::Pixel => event.y,
-        } * 8.;
-        #[cfg(target_arch = "wasm32")]
-        let scroll = match event.unit {
-            MouseScrollUnit::Line => event.y / 16.,
-            MouseScrollUnit::Pixel => event.y,
-        } / 100.;
-
-        let new = time_step
-            .timestep()
-            .mul_f64(1.2f64.powf(scroll as f64))
-            .clamp(MIN_TIMESTEP, MAX_TIMESTEP);
-
-        time_step.set_timestep(new);
-    }
+    changes.clear();
 }
 
 // AI
-pub fn cuboid_wireframe_mesh(size: Vec3) -> Mesh {
+pub fn cube_wireframe_mesh(size: f32) -> Mesh {
     let h = size / 2.;
 
     let corners = [
-        vec3(-h.x, -h.y, -h.z),
-        vec3(h.x, -h.y, -h.z),
-        vec3(h.x, h.y, -h.z),
-        vec3(-h.x, h.y, -h.z),
-        vec3(-h.x, -h.y, h.z),
-        vec3(h.x, -h.y, h.z),
-        vec3(h.x, h.y, h.z),
-        vec3(-h.x, h.y, h.z),
+        vec3(-h, -h, -h),
+        vec3(h, -h, -h),
+        vec3(h, h, -h),
+        vec3(-h, h, -h),
+        vec3(-h, -h, h),
+        vec3(h, -h, h),
+        vec3(h, h, h),
+        vec3(-h, h, h),
     ];
     let edges = [
         [0, 1],

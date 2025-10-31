@@ -16,6 +16,9 @@ pub const VOL: usize = LEN * LEN * LEN;
 
 pub type Voxels = [Option<Voxel>; VOL];
 
+#[derive(Component, Deref, DerefMut, Default)]
+pub struct BoxChunk(Box<Chunk>);
+
 // TODO: runtime enumeration/indexing
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,6 +49,10 @@ impl Chunk {
     fn masks(&mut self, f: impl Fn(&mut Masks)) {
         f(&mut self.front_masks);
         f(&mut self.back_masks);
+    }
+
+    pub fn copy_back_to_front(&mut self) {
+        self.front_masks = self.back_masks.clone();
     }
 
     pub fn set(&mut self, p: impl Index3d, v: Option<Voxel>) {
