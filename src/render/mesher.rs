@@ -406,12 +406,18 @@ impl Mesher {
                     self.inner
                         .merge_x(chunk, origin, remesh.x, f, &mut self.quads);
 
+                    let mut src_start = 0;
                     for x in BitIter::from(remesh.x).map(|x| origin.x + x as i32) {
-                        let src_end = self.quads.partition_point(|q| q.pos.x == x);
                         let dst_range = key_range(&quads, |q| q.pos.x, x);
 
-                        quads.splice(dst_range, self.quads.drain(..src_end));
+                        let src_end = self.quads.partition_point(|q| q.pos.x < x);
+                        let replace_with = self.quads[src_start..src_end].iter().copied();
+                        src_start = src_end;
+
+                        quads.splice(dst_range, replace_with);
                     }
+
+                    self.quads.clear();
                 }
                 PosY | NegY => {
                     self.inner.merge_y(
@@ -422,12 +428,18 @@ impl Mesher {
                         &mut self.quads,
                     );
 
+                    let mut src_start = 0;
                     for y in BitIter::from(remesh.y).map(|y| origin.y + y as i32) {
-                        let src_end = self.quads.partition_point(|q| q.pos.y == y);
                         let dst_range = key_range(&quads, |q| q.pos.y, y);
 
-                        quads.splice(dst_range, self.quads.drain(..src_end));
+                        let src_end = self.quads.partition_point(|q| q.pos.y < y);
+                        let replace_with = self.quads[src_start..src_end].iter().copied();
+                        src_start = src_end;
+
+                        quads.splice(dst_range, replace_with);
                     }
+
+                    self.quads.clear();
                 }
                 PosZ | NegZ => {
                     self.inner.merge_z(
@@ -438,12 +450,18 @@ impl Mesher {
                         &mut self.quads,
                     );
 
+                    let mut src_start = 0;
                     for z in BitIter::from(remesh.z).map(|z| origin.z + z as i32) {
-                        let src_end = self.quads.partition_point(|q| q.pos.z == z);
                         let dst_range = key_range(&quads, |q| q.pos.z, z);
 
-                        quads.splice(dst_range, self.quads.drain(..src_end));
+                        let src_end = self.quads.partition_point(|q| q.pos.z < z);
+                        let replace_with = self.quads[src_start..src_end].iter().copied();
+                        src_start = src_end;
+
+                        quads.splice(dst_range, replace_with);
                     }
+
+                    self.quads.clear();
                 }
             }
         }

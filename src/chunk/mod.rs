@@ -23,6 +23,7 @@ pub enum Voxel {
     Liquid,
     Solid,
 }
+
 pub struct Chunk {
     pub voxels: Voxels,
     pub front_masks: Masks,

@@ -157,7 +157,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 @fragment
 fn fragment(
     in: VertexOutput,
-    @builtin(front_facing) is_front: bool,
 ) -> @location(0) vec4<f32> {
     var pbr_input: PbrInput = pbr_input_new();
 

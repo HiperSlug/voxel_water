@@ -7,7 +7,8 @@ use bevy::{
     },
     mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat},
     pbr::{
-        MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMaterialBindGroup, SetMeshBindGroup, SetMeshViewBindGroup, SetMeshViewBindingArrayBindGroup
+        MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
+        SetMeshViewBindingArrayBindGroup,
     },
     prelude::*,
     render::{
@@ -228,7 +229,7 @@ type DrawCustom = (
     SetMeshViewBindGroup<0>,
     SetMeshViewBindingArrayBindGroup<1>,
     SetMeshBindGroup<2>,
-    SetMaterialBindGroup<3>,
+    // SetMaterialBindGroup<3>, // this was returning RenderCommandResult::Skip
     DrawMeshInstanced,
 );
 
@@ -245,6 +246,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
 
     #[inline]
     fn render<'w>(
+        // It seems this function is never getting called.
         item: &P,
         _view: (),
         item_q: Option<(&'w TextureArrayBindGroup, &'w InstanceBuffer)>,
@@ -253,24 +255,31 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
     ) -> RenderCommandResult {
         // A borrow check workaround.
         let mesh_allocator = mesh_allocator.into_inner();
+        info!("marker1");
 
         let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(item.main_entity())
         else {
             return RenderCommandResult::Skip;
         };
+        info!("marker1.1");
         let Some(gpu_mesh) = meshes.into_inner().get(mesh_instance.mesh_asset_id) else {
             return RenderCommandResult::Skip;
         };
 
+        info!("marker1.2");
+
         let Some((bind_group, instance_buffer)) = item_q else {
             return RenderCommandResult::Skip;
         };
+        info!("marker2");
+
         if instance_buffer.length == 0 {
             return RenderCommandResult::Skip;
         }
         let Some(bind_group) = &bind_group.0 else {
             return RenderCommandResult::Skip;
         };
+        info!("marker3");
 
         let Some(vertex_buffer_slice) =
             mesh_allocator.mesh_vertex_slice(&mesh_instance.mesh_asset_id)
@@ -278,10 +287,12 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
             return RenderCommandResult::Skip;
         };
 
+        info!("marker4");
+
         pass.set_vertex_buffer(0, vertex_buffer_slice.buffer.slice(..));
         pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
 
-        pass.set_bind_group(0, bind_group, &[]);
+        pass.set_bind_group(3, bind_group, &[]);
 
         match &gpu_mesh.buffer_info {
             RenderMeshBufferInfo::Indexed {

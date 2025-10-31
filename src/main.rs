@@ -1,3 +1,4 @@
+mod block;
 mod chunk;
 mod flycam;
 mod jumpscare;
@@ -52,7 +53,7 @@ impl Plugin for Game {
     }
 }
 
-#[derive(Component, DerefMut, Deref, Default)]
+#[derive(Component, Deref, DerefMut, Default)]
 struct BoxChunk(Box<Chunk>);
 
 fn setup(
