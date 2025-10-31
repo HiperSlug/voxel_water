@@ -49,7 +49,7 @@ impl Plugin for QuadInstancingPlugin {
         embedded_asset!(app, "quad.wgsl");
         embedded_asset!(app, "texture_array.ktx2");
 
-        app.add_plugins((ExtractComponentPlugin::<ChunkQuads>::default(),));
+        app.add_plugins((ExtractComponentPlugin::<ChunkMesh>::default(),));
 
         app.sub_app_mut(RenderApp)
             .init_resource::<ArrayTextureBindGroup>()
@@ -131,8 +131,8 @@ impl ExtractComponent for ChunkMesh {
 
     fn extract_component(mesh: QueryItem<'_, '_, Self::QueryData>) -> Option<Self::Out> {
         let mut out = ChunkQuads(Vec::with_capacity(mesh.len()));
-        for (i, q) in mesh.quads().enumerate() {
-            out[i] = *q;
+        for q in mesh.quads() {
+            out.push(*q);
         }
         Some(out)
     }

@@ -68,8 +68,8 @@ fn setup(
     // player
     commands.spawn((
         Transform {
-            translation: vec3(32.0, 72.0, -8.0),
-            rotation: Quat::from_rotation_x(PI / 4.),
+            translation: vec3(32.0, 80.0, -8.0),
+            rotation: Quat::from_rotation_x(PI / 4.) * Quat::from_rotation_y(PI),
             ..default()
         },
         Skybox {
