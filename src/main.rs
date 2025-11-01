@@ -114,7 +114,7 @@ fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>, mut tick: 
     let (mut chunk, mut changes) = chunk.into_inner();
 
     chunk.liquid_tick(*tick);
-    chunk.copy_back_to_front();
+    chunk.masks.dblt_masks.copy_back_to_front();
 
     for (dst, src) in chunk.dst_to_src.drain() {
         changes.push(dst);

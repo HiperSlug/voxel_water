@@ -1,12 +1,15 @@
+mod double_buffered;
 pub mod index;
 mod liquid_tick;
-mod masks;
+pub mod masks;
 
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 
-pub use index::*;
-pub use masks::*;
+use index::Index3d;
+use masks::Masks;
+
+pub use masks::PAD_MASK;
 
 pub const BITS: u32 = 6;
 
@@ -15,13 +18,13 @@ pub const LEN_U32: u32 = LEN as u32;
 pub const AREA: usize = LEN * LEN;
 pub const VOL: usize = LEN * LEN * LEN;
 
+pub type Mask = [u64; AREA];
 pub type Voxels = [Option<Voxel>; VOL];
 
-#[derive(Component, Deref, DerefMut, Default)]
-pub struct BoxChunk(Box<Chunk>);
+pub const DEFAULT_MASK: Mask = [0; AREA];
+pub const DEFAULT_VOXELS: Voxels = [None; VOL];
 
 // TODO: runtime enumeration/indexing
-#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Voxel {
     Liquid,
@@ -30,42 +33,32 @@ pub enum Voxel {
 
 pub struct Chunk {
     pub voxels: Voxels,
-    pub front_masks: Masks,
-    pub back_masks: Masks,
+    pub masks: Masks,
     pub dst_to_src: HashMap<usize, usize>,
 }
 
 impl Default for Chunk {
     fn default() -> Self {
         Self {
-            voxels: [None; VOL],
-            front_masks: default(),
-            back_masks: default(),
+            voxels: DEFAULT_VOXELS,
+            masks: default(),
             dst_to_src: default(),
         }
     }
 }
 
 impl Chunk {
-    fn masks(&mut self, f: impl Fn(&mut Masks)) {
-        f(&mut self.front_masks);
-        f(&mut self.back_masks);
-    }
-
-    pub fn copy_back_to_front(&mut self) {
-        self.front_masks = self.back_masks.clone();
-    }
-
     pub fn set(&mut self, p: impl Index3d, v: Option<Voxel>) {
         self.voxels[p.i_3d()] = v;
-        self.masks(|m| m.set(p, v))
+
+        self.masks.set(p, v);
     }
 
     pub fn fill_padding(&mut self, v: Option<Voxel>) {
         // +-Z
         for z in [0, LEN_U32 - 1] {
             for y in 0..LEN_U32 {
-                self.masks(|m| m.fill_row([y, z], v));
+                self.masks.fill_row([y, z], v);
                 for x in 0..LEN_U32 {
                     let i = [x, y, z].i_3d();
                     self.voxels[i] = v;
@@ -76,7 +69,7 @@ impl Chunk {
         // +-Y
         for z in 1..LEN_U32 - 1 {
             for y in [0, LEN_U32 - 1] {
-                self.masks(|m| m.fill_row([y, z], v));
+                self.masks.fill_row([y, z], v);
                 for x in 0..LEN_U32 {
                     let i = [x, y, z].i_3d();
                     self.voxels[i] = v;
@@ -87,7 +80,7 @@ impl Chunk {
         // +-X
         for z in 1..LEN_U32 - 1 {
             for y in 1..LEN_U32 - 1 {
-                self.masks(|m| m.set_row_padding([y, z], v));
+                self.masks.set_row_padding([y, z], v);
                 for x in [0, LEN_U32 - 1] {
                     let i = [x, y, z].i_3d();
                     self.voxels[i] = v;
@@ -115,7 +108,7 @@ impl Chunk {
             if in_unpad_bounds {
                 let pos = pos.as_uvec3();
 
-                if self.front_masks.is_some(pos) {
+                if self.masks.is_some(pos) {
                     return [last, Some(pos)];
                 }
 
@@ -142,3 +135,6 @@ impl Chunk {
         }
     }
 }
+
+#[derive(Component, Deref, DerefMut, Default)]
+pub struct BoxChunk(Box<Chunk>);

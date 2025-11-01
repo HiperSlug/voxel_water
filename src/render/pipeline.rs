@@ -31,7 +31,7 @@ use bevy::render::texture::{FallbackImage, GpuImage};
 use bevy::render::view::ExtractedView;
 use bevy::render::{Render, RenderApp, RenderStartup, RenderSystems};
 
-use super::{Quad, ChunkMesh};
+use super::{ChunkMesh, Quad};
 
 pub struct QuadInstancingPlugin;
 

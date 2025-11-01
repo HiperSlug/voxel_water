@@ -8,7 +8,7 @@ use enum_map::{Enum, EnumMap};
 
 pub use Face::*;
 
-use crate::chunk::Index3d;
+use crate::chunk::index::Index3d;
 
 const MAX6: u32 = (1 << 6) - 1;
 const MAX16: u32 = u16::MAX as u32;

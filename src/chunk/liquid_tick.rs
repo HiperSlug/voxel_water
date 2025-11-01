@@ -1,104 +1,13 @@
+mod action;
+
 use bevy::platform::hash::FixedState;
 use bit_iter::BitIter;
 use std::hash::BuildHasher;
 
-use super::*;
-const I_STRIDE_Y_2D: isize = STRIDE_Y_2D as isize;
-const I_STRIDE_Z_2D: isize = STRIDE_Z_2D as isize;
+use action::{ACTIONS, Action, DOWN_ACTION};
 
-const I_STRIDE_X_3D: isize = STRIDE_X_3D as isize;
-const I_STRIDE_Y_3D: isize = STRIDE_Y_3D as isize;
-const I_STRIDE_Z_3D: isize = STRIDE_Z_3D as isize;
-
-// TODO: make this mess *disappear*
-const MOVES: &[&[(Delta, &[PreReq])]] = &[
-    &[
-        (Delta::new([1, -1, 0]), &[PreReq::none([1, 0, 0])]),
-        (Delta::new([-1, -1, 0]), &[PreReq::none([-1, 0, 0])]),
-        (Delta::new([0, -1, 1]), &[PreReq::none([0, 0, 1])]),
-        (Delta::new([0, -1, -1]), &[PreReq::none([0, 0, -1])]),
-    ],
-    &[
-        (
-            Delta::new([1, -1, 1]),
-            &[
-                PreReq::none([1, 0, 0]),
-                PreReq::none([0, 0, 1]),
-                PreReq::none([1, 0, 1]),
-            ],
-        ),
-        (
-            Delta::new([-1, -1, 1]),
-            &[
-                PreReq::none([-1, 0, 0]),
-                PreReq::none([0, 0, 1]),
-                PreReq::none([-1, 0, 1]),
-            ],
-        ),
-        (
-            Delta::new([1, -1, -1]),
-            &[
-                PreReq::none([1, 0, 0]),
-                PreReq::none([0, 0, -1]),
-                PreReq::none([1, 0, -1]),
-            ],
-        ),
-        (
-            Delta::new([-1, -1, -1]),
-            &[
-                PreReq::none([-1, 0, 0]),
-                PreReq::none([0, 0, -1]),
-                PreReq::none([-1, 0, -1]),
-            ],
-        ),
-    ],
-    &[
-        (Delta::new([1, 0, 0]), &[PreReq::some([-1, 0, 0])]),
-        (Delta::new([-1, 0, 0]), &[PreReq::some([1, 0, 0])]),
-        (Delta::new([0, 0, 1]), &[PreReq::some([0, 0, -1])]),
-        (Delta::new([0, 0, -1]), &[PreReq::some([0, 0, 1])]),
-    ],
-];
-
-struct Delta {
-    x: isize,
-    i_2d: isize,
-    i_3d: isize,
-}
-
-impl Delta {
-    const fn new([x, y, z]: [isize; 3]) -> Self {
-        Self {
-            i_3d: x * I_STRIDE_X_3D + y * I_STRIDE_Y_3D + z * I_STRIDE_Z_3D,
-            i_2d: y * I_STRIDE_Y_2D + z * I_STRIDE_Z_2D,
-            x,
-        }
-    }
-}
-
-struct PreReq {
-    not: bool,
-    delta_i_2d: isize,
-    delta_x: isize,
-}
-
-impl PreReq {
-    const fn none([x, y, z]: [isize; 3]) -> Self {
-        Self {
-            not: true,
-            delta_i_2d: y * I_STRIDE_Y_2D + z * I_STRIDE_Z_2D,
-            delta_x: x,
-        }
-    }
-
-    const fn some([x, y, z]: [isize; 3]) -> Self {
-        Self {
-            not: false,
-            delta_i_2d: y * I_STRIDE_Y_2D + z * I_STRIDE_Z_2D,
-            delta_x: x,
-        }
-    }
-}
+use super::index::{Index2d, Index3d};
+use super::{Chunk, LEN_U32, PAD_MASK};
 
 impl Chunk {
     pub fn liquid_tick(&mut self, tick: u64) {
@@ -109,15 +18,14 @@ impl Chunk {
             'row: for y in 1..LEN_U32 - 1 {
                 let i_2d = [y, z].i_2d();
 
-                let mut liquid = self.front_masks.liquid_mask[i_2d] & !PAD_MASK;
+                let mut liquid = self.masks.dblt_masks.front.liquid_mask[i_2d] & !PAD_MASK;
 
                 if liquid == 0 {
                     continue 'row;
                 }
 
                 {
-                    let moved =
-                        self.try_move_row(liquid, i_2d, &state, &Delta::new([0, -1, 0]), &[]);
+                    let moved = self.try_move_row(liquid, i_2d, &state, &DOWN_ACTION);
 
                     liquid &= !moved;
 
@@ -136,7 +44,7 @@ impl Chunk {
                     !x_mask & !pos_mask,
                 ];
 
-                for moves in MOVES {
+                for action_group in ACTIONS {
                     for i in 0..4 {
                         for j in 0..4 {
                             let group = liquid & group_masks[(i + j) % 4];
@@ -144,9 +52,7 @@ impl Chunk {
                                 continue;
                             }
 
-                            let (d, prereqs) = &moves[j];
-
-                            let moved = self.try_move_row(group, i_2d, &state, d, prereqs);
+                            let moved = self.try_move_row(group, i_2d, &state, &action_group[j]);
 
                             liquid &= !moved;
 
@@ -160,40 +66,50 @@ impl Chunk {
         }
     }
 
-    #[inline(always)]
     fn try_move_row(
         &mut self,
         group: u64,
         src_i_2d: usize,
         state: &FixedState,
-        d: &Delta,
-        prereqs: &[PreReq],
+        action: &Action,
     ) -> u64 {
-        let dst_i_2d = src_i_2d.wrapping_add_signed(d.i_2d);
+        let (delta, prereqs) = action;
 
-        let try_move = group
-            & self.build_prereq_mask(src_i_2d, prereqs)
-            & !self.front_masks.some_mask[dst_i_2d].inv_shift(d.x);
+        let (d_x, d_i_2d) = delta.x_and_i_2d();
+        let d_i_3d = delta.i_3d();
 
-        let success = try_move & !self.back_masks.some_mask[dst_i_2d].inv_shift(d.x);
+        let mut prereq_mask = !0;
+        for prereq in *prereqs {
+            let (x, i_2d) = prereq.delta.x_and_i_2d();
+            let i_2d = src_i_2d.wrapping_add_signed(i_2d);
+            let mask = self.masks.dblt_masks.front.some_mask[i_2d].inv_shift(x);
+
+            prereq_mask &= if prereq.not { !mask } else { mask };
+        }
+
+        let dst_i_2d = src_i_2d.wrapping_add_signed(d_i_2d);
+
+        let try_move =
+            group & prereq_mask & !self.masks.dblt_masks.front.some_mask[dst_i_2d].inv_shift(d_x);
+
+        let success = try_move & !self.masks.dblt_masks.back.some_mask[dst_i_2d].inv_shift(d_x);
         let failure = try_move & !success;
 
         let mut moved = success;
 
         if success != 0 {
-            let add_mask = success.shift(d.x);
+            let add_mask = success.shift(d_x);
 
-            // INVARIANT: Only voxels marked `some` && `liquid` are ever moved with this function.
-            self.back_masks.some_mask[dst_i_2d] |= add_mask;
-            self.back_masks.liquid_mask[dst_i_2d] |= add_mask;
+            self.masks.dblt_masks.back.some_mask[dst_i_2d] |= add_mask;
+            self.masks.dblt_masks.back.liquid_mask[dst_i_2d] |= add_mask;
 
-            self.back_masks.some_mask[src_i_2d] &= !success;
-            self.back_masks.liquid_mask[src_i_2d] &= !success;
+            self.masks.dblt_masks.back.some_mask[src_i_2d] &= !success;
+            self.masks.dblt_masks.back.liquid_mask[src_i_2d] &= !success;
         }
 
         for x in BitIter::from(success) {
             let src_i_3d = (x, src_i_2d).i_3d();
-            let dst_i_3d = src_i_3d.wrapping_add_signed(d.i_3d);
+            let dst_i_3d = src_i_3d.wrapping_add_signed(d_i_3d);
 
             self.voxels[dst_i_3d] = self.voxels[src_i_3d];
             self.voxels[src_i_3d] = None;
@@ -203,7 +119,7 @@ impl Chunk {
 
         for x in BitIter::from(failure) {
             let src_i_3d = (x, src_i_2d).i_3d();
-            let dst_i_3d = src_i_3d.wrapping_add_signed(d.i_3d);
+            let dst_i_3d = src_i_3d.wrapping_add_signed(d_i_3d);
 
             let other_src_i_3d = self.dst_to_src.get_mut(&dst_i_3d).unwrap();
 
@@ -211,10 +127,16 @@ impl Chunk {
             let other_priority = state.hash_one(*other_src_i_3d);
 
             if priority >= other_priority {
-                moved |= 1 << x;
+                let src_bit = u64::bit(x);
+                moved |= src_bit;
 
-                self.back_masks.set(*other_src_i_3d, Some(Voxel::Liquid));
-                self.back_masks.set(src_i_3d, None);
+                let (other_x, other_i_2d) = other_src_i_3d.x_and_i_2d();
+                let other_bit = u64::bit(other_x as usize);
+
+                self.masks.dblt_masks.back.liquid_mask[other_i_2d] |= other_bit;
+                self.masks.dblt_masks.back.some_mask[other_i_2d] |= other_bit;
+                self.masks.dblt_masks.back.liquid_mask[src_i_2d] &= !src_bit;
+                self.masks.dblt_masks.back.some_mask[src_i_2d] &= !src_bit;
 
                 self.voxels[*other_src_i_3d] = self.voxels[src_i_3d];
                 self.voxels[src_i_3d] = None;
@@ -225,28 +147,26 @@ impl Chunk {
 
         moved
     }
+}
 
-    fn build_prereq_mask(&self, src_i_2d: usize, prereqs: &[PreReq]) -> u64 {
-        let mut prereq_mask = !0;
-        for prereq in prereqs {
-            let i_2d = src_i_2d.wrapping_add_signed(prereq.delta_i_2d);
-            let mask = self.front_masks.some_mask[i_2d].inv_shift(prereq.delta_x);
+trait Shift: Copy {
+    const ONE: Self;
+    
+    /// shl
+    fn shift(self, rhs: isize) -> u64;
 
-            prereq_mask &= if prereq.not { !mask } else { mask };
-        }
-        prereq_mask
+    /// shr
+    fn inv_shift(self, rhs: isize) -> u64;
+
+    #[inline]
+    fn bit(n: usize) -> u64 {
+        Self::ONE.shift(n as isize)
     }
 }
 
-/// `+ => shl`, \
-/// `- => shr`,
-trait Shift: Copy {
-    fn shift(self, rhs: isize) -> u64;
-
-    fn inv_shift(self, rhs: isize) -> u64;
-}
-
 impl Shift for u64 {
+    const ONE: Self = 1;
+
     fn shift(self, rhs: isize) -> u64 {
         let mut out = self.wrapping_shr(-rhs as u32);
         if rhs > 0 {

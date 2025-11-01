@@ -46,7 +46,7 @@ pub struct InnerMesher {
 
 impl InnerMesher {
     fn build_all_visible_masks(&mut self, chunk: &Chunk) {
-        let some_mask = &chunk.front_masks.some_mask;
+        let some_mask = chunk.masks.some_mask();
 
         for f in Face::ALL {
             let visible_mask = &mut self.visible_masks[f];
@@ -78,7 +78,7 @@ impl InnerMesher {
     }
 
     fn build_visible_masks(&mut self, chunk: &Chunk, remesh: U64Vec3) {
-        let some_mask = &chunk.front_masks.some_mask;
+        let some_mask = chunk.masks.some_mask();
 
         let other_z = !remesh.z & !PAD_MASK;
         let other_y = !remesh.y & !PAD_MASK;
