@@ -1,3 +1,5 @@
+// TODO: each row should be a structure for cache friendly writes (reads we're never that cache friendly)
+
 use bevy::prelude::*;
 
 use super::double_buffered::DoubleBuffered;

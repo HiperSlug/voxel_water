@@ -102,9 +102,11 @@ impl Chunk {
 
             self.masks.dblt_masks.back.some_mask[dst_i_2d] |= add_mask;
             self.masks.dblt_masks.back.liquid_mask[dst_i_2d] |= add_mask;
+            self.masks.transparent_mask[dst_i_2d] |= add_mask; // assuming liquid is always transparent
 
             self.masks.dblt_masks.back.some_mask[src_i_2d] &= !success;
             self.masks.dblt_masks.back.liquid_mask[src_i_2d] &= !success;
+            self.masks.transparent_mask[dst_i_2d] &= !success;
         }
 
         for x in BitIter::from(success) {
@@ -127,16 +129,18 @@ impl Chunk {
             let other_priority = state.hash_one(*other_src_i_3d);
 
             if priority >= other_priority {
-                let src_bit = u64::bit(x);
+                let src_bit = 1 << x;
                 moved |= src_bit;
 
                 let (other_x, other_i_2d) = other_src_i_3d.x_and_i_2d();
-                let other_bit = u64::bit(other_x as usize);
+                let other_bit = 1 << other_x;
 
                 self.masks.dblt_masks.back.liquid_mask[other_i_2d] |= other_bit;
                 self.masks.dblt_masks.back.some_mask[other_i_2d] |= other_bit;
+                self.masks.transparent_mask[other_i_2d] |= other_bit; // same assumption
                 self.masks.dblt_masks.back.liquid_mask[src_i_2d] &= !src_bit;
                 self.masks.dblt_masks.back.some_mask[src_i_2d] &= !src_bit;
+                self.masks.transparent_mask[other_i_2d] &= !src_bit;
 
                 self.voxels[*other_src_i_3d] = self.voxels[src_i_3d];
                 self.voxels[src_i_3d] = None;
@@ -157,11 +161,6 @@ trait Shift: Copy {
 
     /// shr
     fn inv_shift(self, rhs: isize) -> u64;
-
-    #[inline]
-    fn bit(n: usize) -> u64 {
-        Self::ONE.shift(n as isize)
-    }
 }
 
 impl Shift for u64 {
