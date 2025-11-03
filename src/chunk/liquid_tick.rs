@@ -153,9 +153,7 @@ impl Chunk {
     }
 }
 
-trait Shift: Copy {
-    const ONE: Self;
-    
+trait Shift: Copy {    
     /// shl
     fn shift(self, rhs: isize) -> u64;
 
@@ -164,8 +162,6 @@ trait Shift: Copy {
 }
 
 impl Shift for u64 {
-    const ONE: Self = 1;
-
     fn shift(self, rhs: isize) -> u64 {
         let mut out = self.wrapping_shr(-rhs as u32);
         if rhs > 0 {

@@ -1,12 +1,5 @@
 use super::super::index::*;
 
-const I_STRIDE_Y_2D: isize = STRIDE_Y_2D as isize;
-const I_STRIDE_Z_2D: isize = STRIDE_Z_2D as isize;
-
-const I_STRIDE_X_3D: isize = STRIDE_X_3D as isize;
-const I_STRIDE_Y_3D: isize = STRIDE_Y_3D as isize;
-const I_STRIDE_Z_3D: isize = STRIDE_Z_3D as isize;
-
 pub type Action = (Delta, &'static [PreReq]);
 type ActionGroup = [Action; 4];
 

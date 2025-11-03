@@ -47,30 +47,54 @@ pub struct InnerMesher {
 impl InnerMesher {
     fn build_all_visible_masks(&mut self, chunk: &Chunk) {
         let some_mask = chunk.masks.some_mask();
+        let transparent_mask = &chunk.masks.transparent_mask;
 
         for f in Face::ALL {
             let visible_mask = &mut self.visible_masks[f];
+
+            let offset = match f {
+                PosX => I_STRIDE_X_3D,
+                PosY => I_STRIDE_Y_3D,
+                PosZ => I_STRIDE_Z_3D,
+                NegX => -I_STRIDE_X_3D,
+                NegY => -I_STRIDE_Y_3D,
+                NegZ => -I_STRIDE_Z_3D,
+            };
 
             for z in 1..LEN_U32 - 1 {
                 for y in 1..LEN_U32 - 1 {
                     let i_2d = [y, z].i_2d();
 
-                    let some = some_mask[i_2d];
-                    let unpad_some = some & !PAD_MASK;
+                    let pad_some = some_mask[i_2d];
+                    let transparent = transparent_mask[i_2d] & !PAD_MASK;
+                    let some = pad_some & !PAD_MASK;
 
-                    if unpad_some == 0 {
+                    if some == 0 {
                         visible_mask[i_2d] = 0;
-                    } else {
-                        let adj_some = match f {
-                            PosX => some >> 1,
-                            NegX => some << 1,
-                            PosY => some_mask[i_2d + STRIDE_Y_2D],
-                            NegY => some_mask[i_2d - STRIDE_Y_2D],
-                            PosZ => some_mask[i_2d + STRIDE_Z_2D],
-                            NegZ => some_mask[i_2d - STRIDE_Z_2D],
-                        };
+                        continue;
+                    }
 
-                        visible_mask[i_2d] = unpad_some & !adj_some;
+                    let adj_some = match f {
+                        PosX => pad_some >> 1,
+                        PosY => some_mask[i_2d + STRIDE_Y_2D],
+                        PosZ => some_mask[i_2d + STRIDE_Z_2D],
+                        NegX => pad_some << 1,
+                        NegY => some_mask[i_2d - STRIDE_Y_2D],
+                        NegZ => some_mask[i_2d - STRIDE_Z_2D],
+                    };
+
+                    visible_mask[i_2d] = some & !adj_some;
+
+                    for x in BitIter::from(transparent) { // perhaps only iter over `transparent & adj_transparent`
+                        let i_3d = (x, i_2d).i_3d();
+                        let adj_i_3d = i_3d.wrapping_add_signed(offset);
+
+                        let voxel_opt = chunk.voxels[i_3d];
+                        let adj_voxel_opt = chunk.voxels[adj_i_3d];
+
+                        let ne = voxel_opt != adj_voxel_opt;
+                        let bit = (ne as u64) << x;
+                        visible_mask[i_2d] |= bit;
                     }
                 }
             }
@@ -97,10 +121,10 @@ impl InnerMesher {
                 } else {
                     let adj_some = match f {
                         PosX => some >> 1,
-                        NegX => some << 1,
                         PosY => some_mask[i_2d + STRIDE_Y_2D],
-                        NegY => some_mask[i_2d - STRIDE_Y_2D],
                         PosZ => some_mask[i_2d + STRIDE_Z_2D],
+                        NegX => some << 1,
+                        NegY => some_mask[i_2d - STRIDE_Y_2D],
                         NegZ => some_mask[i_2d - STRIDE_Z_2D],
                     };
 

@@ -13,6 +13,13 @@ pub const STRIDE_Z_3D: usize = 1 << Shape3d::SHIFTS[2];
 pub const STRIDE_Y_2D: usize = 1 << Shape2d::SHIFTS[0];
 pub const STRIDE_Z_2D: usize = 1 << Shape2d::SHIFTS[1];
 
+pub const I_STRIDE_X_3D: isize = STRIDE_X_3D as isize;
+pub const I_STRIDE_Y_3D: isize = STRIDE_Y_3D as isize;
+pub const I_STRIDE_Z_3D: isize = STRIDE_Z_3D as isize;
+
+pub const I_STRIDE_Y_2D: isize = STRIDE_Y_2D as isize;
+pub const I_STRIDE_Z_2D: isize = STRIDE_Z_2D as isize;
+
 const MASK_X: usize = Shape3d::MASKS[0] as usize;
 
 pub trait Index2d: Copy {
