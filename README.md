@@ -1,22 +1,30 @@
 # Voxel Water 
 A cellular based water simulation in a voxel grid. It's governed by simple gravity rules that make the water spread out.
 
-Btw I'm using [Bevy](https://bevy.org/) for basically everything else.
+I'm using [Bevy](https://bevy.org/) for basically everything else.
 
-[VIDEO](https://youtu.be/Sgi_PgaPVHo) demo. [COOL](https://hiperslug.itch.io/magic) demo
+I switched how textures were setup then when I went to build for web it turns out the format I chose is not supported and I don't have time to change it *today*.
 
-# Update #3
-This is the continuation of my voxel water project. This week I did two major things:
-1. Reworked the movement system. I changed the setup completely to make it WAY more readable as well as fix a litney of small problems. 
-2. Added incremental meshing. I setup the meshing algorithm to be able to modify a mesh *in place* so every time I move a cell I only remesh the 12 faces that it directly influences instead of *all* of them.
+[VIDEO](https://youtu.be/TMTr67NGoU0) demo. 
+[OLD ITCH](https://hiperslug.itch.io/magic) demo.
+
+# Update #4
+This is the continuation of my voxel water project. This week I mostly worked on rendering.
+
+I added support for textures and have half-implimented support for transparent textures. I used this to add some spooky textures.
+
+I also fixed the lighting (it was broken and I was just faking it).
 
 # Future
-I setup a very primitive rendering pipeline last week. I really should've worked on that but it *scares* me.
+I need to finish transparent textures. I also have a lot of work i *could* do on the rendering pipeline but I'm not sure it's worth it for this project.
 
-I also have to eventually move to a multi-chunk simulation. Which means suddenly I have a mix of dense and sparse data that I'm trying to handle, preferabbly in parrallel and/or in background threads.
+Furthermore expanding this beyond a single chunk would be great.
 
-# Gambling
-I set a high personal bet on thursday then got **sick** on friday...
+I also think I want to, yet again, rework the chunk because it's been slowly changing as more requirements are put on it and I think I can jump the gun.
 
-# Theme 
-I got a freeby. This is literally water *falling*.
+# Issues
+Apparently people have had issues 
+1. Crashing
+2. Performance
+
+This is probably because I'm messing around with custom stuff that isn't very cross platform. Unfortunately I haven't really looked into it yet.
