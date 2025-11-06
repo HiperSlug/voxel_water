@@ -4,10 +4,11 @@ mod flycam;
 mod input;
 mod jumpscare;
 mod render;
+mod skybox;
+mod texture_array;
 
 use std::f32::consts::PI;
 
-use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::camera::visibility::NoFrustumCulling;
 use bevy::core_pipeline::Skybox;
 use bevy::mesh::{Indices, PrimitiveTopology};
@@ -19,8 +20,10 @@ use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::input::{GameInputPlugin, SelectedMarker};
 use crate::jumpscare::JumpscarePlugin;
 use crate::render::mesher::MESHER;
-use crate::render::pipeline::QuadInstancingPlugin;
+use crate::render::pipeline::{QuadInstancingPlugin, TextureArrayMaterial};
 use crate::render::{ChunkMesh, ChunkMeshChanges};
+use crate::skybox::{SkyboxHandle, SkyboxImagePlugin};
+use crate::texture_array::{TextureArrayHandle, TextureArrayPlugin};
 
 fn main() {
     App::new().add_plugins(Game).run();
@@ -36,23 +39,34 @@ impl Plugin for Game {
             GameInputPlugin,
             QuadInstancingPlugin,
             JumpscarePlugin,
+            SkyboxImagePlugin,
+            TextureArrayPlugin,
         ));
 
-        embedded_asset!(app, "skybox.ktx2");
-
-        app.insert_resource(Time::<Fixed>::from_hz(10.0));
-
-        app.add_systems(Startup, setup)
-            .add_systems(FixedUpdate, liquid_tick)
-            .add_systems(Update, remesh_chunk);
+        app.insert_resource(Time::<Fixed>::from_hz(10.0))
+            .init_state::<GameState>()
+            .add_systems(Update, setup.run_if(in_state(GameState::Setup)))
+            .add_systems(
+                FixedUpdate,
+                liquid_tick.run_if(in_state(GameState::NotSetup)),
+            )
+            .add_systems(Update, remesh_chunk.run_if(in_state(GameState::NotSetup)));
     }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, States, Default)]
+enum GameState {
+    #[default]
+    Setup,
+    NotSetup,
 }
 
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
+    skybox_handle: If<Res<SkyboxHandle>>,
+    texture_array_handle: If<Res<TextureArrayHandle>>,
 ) {
     // light
     commands.spawn((
@@ -73,7 +87,7 @@ fn setup(
             ..default()
         },
         Skybox {
-            image: load_embedded_asset!(&*asset_server, "skybox.ktx2"),
+            image: skybox_handle.clone(),
             brightness: 1000.0,
             ..default()
         },
@@ -107,7 +121,14 @@ fn setup(
         ChunkMeshChanges::default(),
         Mesh3d(meshes.add(Rectangle::from_length(1.))),
         NoFrustumCulling,
+        TextureArrayMaterial {
+            handle: texture_array_handle.clone(),
+        },
     ));
+
+    commands.remove_resource::<SkyboxHandle>();
+    commands.remove_resource::<TextureArrayHandle>();
+    commands.set_state(GameState::NotSetup);
 }
 
 fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>, mut tick: Local<u64>) {

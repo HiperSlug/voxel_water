@@ -85,7 +85,8 @@ impl InnerMesher {
 
                     visible_mask[i_2d] = some & !adj_some;
 
-                    for x in BitIter::from(transparent) { // perhaps only iter over `transparent & adj_transparent`
+                    for x in BitIter::from(transparent) {
+                        // perhaps only iter over `transparent & adj_transparent`
                         let i_3d = (x, i_2d).i_3d();
                         let adj_i_3d = i_3d.wrapping_add_signed(offset);
 

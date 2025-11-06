@@ -5,7 +5,6 @@ use bevy::ecs::system::{
     SystemParamItem,
     lifetimeless::{Read, SRes},
 };
-use bevy::image::{ImageAddressMode, ImageLoaderSettings};
 use bevy::mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat};
 use bevy::pbr::{
     MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
@@ -38,15 +37,17 @@ pub struct QuadInstancingPlugin;
 impl Plugin for QuadInstancingPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "quad.wgsl");
-        embedded_asset!(app, "texture_array.ktx2");
 
-        app.add_plugins(ExtractComponentPlugin::<ChunkMesh>::default());
+        app.add_plugins((
+            ExtractComponentPlugin::<ChunkMesh>::default(),
+            ExtractComponentPlugin::<TextureArrayMaterial>::default(),
+        ));
 
         app.sub_app_mut(RenderApp)
             .init_resource::<ArrayTextureBindGroup>()
             .add_render_command::<Transparent3d, DrawFunction>()
             .init_resource::<SpecializedMeshPipelines<QuadInstancingPipeline>>()
-            .add_systems(RenderStartup, (init_custom_pipeline, init_material))
+            .add_systems(RenderStartup, init_custom_pipeline)
             .add_systems(
                 Render,
                 (
@@ -74,7 +75,7 @@ fn init_custom_pipeline(
     commands.insert_resource(QuadInstancingPipeline {
         shader: load_embedded_asset!(&*asset_server, "quad.wgsl"),
         mesh_pipeline: mesh_pipeline.clone(),
-        layout: ArrayTextureMaterial::bind_group_layout(&render_device),
+        layout: TextureArrayMaterial::bind_group_layout(&render_device),
     });
 }
 
@@ -202,32 +203,18 @@ fn prepare_instance_buffers(
     }
 }
 
-#[derive(Resource, AsBindGroup, Debug, Clone)]
-pub struct ArrayTextureMaterial {
+#[derive(Component, ExtractComponent, AsBindGroup, Debug, Clone)]
+pub struct TextureArrayMaterial {
     #[texture(0, dimension = "2d_array")]
     #[sampler(1)]
-    pub array_texture: Handle<Image>,
-}
-
-fn init_material(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.insert_resource(ArrayTextureMaterial {
-        array_texture: load_embedded_asset!(
-            &*asset_server,
-            "texture_array.ktx2",
-            |settings: &mut ImageLoaderSettings| {
-                let desc = settings.sampler.get_or_init_descriptor();
-                desc.address_mode_u = ImageAddressMode::Repeat;
-                desc.address_mode_v = ImageAddressMode::Repeat;
-            }
-        ),
-    });
+    pub handle: Handle<Image>,
 }
 
 #[derive(Resource, Default)]
 pub struct ArrayTextureBindGroup(Option<BindGroup>);
 
 fn prepare_bind_group(
-    material: Res<ArrayTextureMaterial>,
+    material: Single<&TextureArrayMaterial>,
     mut bind_group: ResMut<ArrayTextureBindGroup>,
     render_device: Res<RenderDevice>,
     pipeline: Res<QuadInstancingPipeline>,

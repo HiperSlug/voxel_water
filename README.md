@@ -3,10 +3,8 @@ A cellular based water simulation in a voxel grid. It's governed by simple gravi
 
 I'm using [Bevy](https://bevy.org/) for basically everything else.
 
-I switched how textures were setup then when I went to build for web it turns out the format I chose is not supported and I don't have time to change it *today*.
-
 [VIDEO](https://youtu.be/TMTr67NGoU0) demo. 
-[OLD ITCH](https://hiperslug.itch.io/magic) demo.
+[ITCH](https://hiperslug.itch.io/magic) demo.
 
 # Update #4
 This is the continuation of my voxel water project. This week I mostly worked on rendering.

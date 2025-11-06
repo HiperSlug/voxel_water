@@ -10,7 +10,7 @@ impl Plugin for JumpscarePlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "boo_0.ogg");
         embedded_asset!(app, "boo_1.ogg");
-        embedded_asset!(app, "ghost.ktx2");
+        embedded_asset!(app, "ghost.png");
 
         app.add_plugins(TweeningPlugin);
 
@@ -31,7 +31,7 @@ fn init_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
             load_embedded_asset!(&*asset_server, "boo_0.ogg"),
             load_embedded_asset!(&*asset_server, "boo_1.ogg"),
         ],
-        ghost: load_embedded_asset!(&*asset_server, "ghost.ktx2"),
+        ghost: load_embedded_asset!(&*asset_server, "ghost.png"),
     });
 }
 

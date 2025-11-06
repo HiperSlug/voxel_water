@@ -2,6 +2,7 @@ mod double_buffered;
 pub mod index;
 mod liquid_tick;
 pub mod masks;
+mod row;
 
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;

@@ -153,7 +153,7 @@ impl Chunk {
     }
 }
 
-trait Shift: Copy {    
+trait Shift: Copy {
     /// shl
     fn shift(self, rhs: isize) -> u64;
 

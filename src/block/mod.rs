@@ -2,22 +2,23 @@
 
 // TODO: block states
 
+// use arc_swap::ArcSwap;
 use bevy::prelude::*;
 use enum_map::{EnumMap, enum_map};
 use nonmax::NonMaxU16;
 use std::ops::{Index, IndexMut};
-use std::sync::LazyLock;
+// use std::sync::Arc;
 
 use crate::render::Face;
 
-pub static BLOCKS: LazyLock<Blocks> = LazyLock::new(Blocks::temp);
+// pub static BLOCKS: ArcSwap<Blocks> = ArcSwap::new(Arc::new(Blocks::temp()));
 
 pub struct Block {
     pub liquid: bool,
     pub textures: EnumMap<Face, u16>,
 }
 
-#[derive(Deref, DerefMut)]
+#[derive(Deref, DerefMut, Default)]
 pub struct Blocks(pub Vec<Block>);
 
 impl Blocks {
