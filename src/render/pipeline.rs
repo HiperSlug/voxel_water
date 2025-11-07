@@ -1,10 +1,7 @@
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::core_pipeline::core_3d::Transparent3d;
 use bevy::ecs::query::QueryItem;
-use bevy::ecs::system::{
-    SystemParamItem,
-    lifetimeless::{Read, SRes},
-};
+use bevy::ecs::system::{SystemParamItem, lifetimeless::SRes};
 use bevy::mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat};
 use bevy::pbr::{
     MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
@@ -23,7 +20,7 @@ use bevy::render::render_resource::{
     PipelineCache, RenderPipelineDescriptor, SpecializedMeshPipeline, SpecializedMeshPipelineError,
     SpecializedMeshPipelines, VertexAttribute, VertexStepMode,
 };
-use bevy::render::renderer::RenderDevice;
+use bevy::render::renderer::{RenderDevice, RenderQueue};
 use bevy::render::storage::GpuShaderStorageBuffer;
 use bevy::render::sync_world::MainEntity;
 use bevy::render::texture::{FallbackImage, GpuImage};
@@ -47,6 +44,7 @@ impl Plugin for QuadInstancingPlugin {
             .init_resource::<ArrayTextureBindGroup>()
             .add_render_command::<Transparent3d, DrawFunction>()
             .init_resource::<SpecializedMeshPipelines<QuadInstancingPipeline>>()
+            .init_resource::<InstanceBuffer>()
             .add_systems(RenderStartup, init_custom_pipeline)
             .add_systems(
                 Render,
@@ -179,28 +177,32 @@ fn queue_quads(
     }
 }
 
-#[derive(Component)]
+#[derive(Resource, Default)]
 struct InstanceBuffer {
-    buffer: Buffer,
+    buffer: Option<Buffer>,
     length: usize,
 }
 
 fn prepare_instance_buffers(
-    mut commands: Commands,
-    query: Query<(Entity, &ChunkQuads)>,
+    quads: Single<&ChunkQuads>,
     render_device: Res<RenderDevice>,
+    render_queue: Res<RenderQueue>,
+    mut instance_buffer: ResMut<InstanceBuffer>,
 ) {
-    for (entity, quads) in &query {
-        let buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("instance data buffer"),
-            contents: bytemuck::cast_slice(quads),
-            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-        });
-        commands.entity(entity).insert(InstanceBuffer {
-            buffer,
-            length: quads.len(),
-        });
+    let quads = &quads.0;
+
+    if quads.len() > instance_buffer.length {
+        instance_buffer.buffer = Some(render_device.create_buffer_with_data(
+            &BufferInitDescriptor {
+                label: Some("instance data buffer"),
+                contents: bytemuck::cast_slice(quads),
+                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+            },
+        ));
+    } else if let Some(buffer) = instance_buffer.buffer.as_ref() {
+        render_queue.write_buffer(buffer, 0, bytemuck::cast_slice(quads));
     }
+    instance_buffer.length = quads.len();
 }
 
 #[derive(Component, ExtractComponent, AsBindGroup, Debug, Clone)]
@@ -251,17 +253,18 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
         SRes<RenderMeshInstances>,
         SRes<MeshAllocator>,
         SRes<ArrayTextureBindGroup>,
+        SRes<InstanceBuffer>,
     );
     type ViewQuery = ();
-    type ItemQuery = Read<InstanceBuffer>;
+    type ItemQuery = ();
 
     #[inline]
     fn render<'w>(
         // It seems this function is never getting called.
         item: &P,
-        _view: (),
-        instance_buffer: Option<&'w InstanceBuffer>,
-        (meshes, render_mesh_instances, mesh_allocator, bind_group): SystemParamItem<
+        _: (),
+        _: Option<()>,
+        (meshes, render_mesh_instances, mesh_allocator, bind_group, instance_buffer): SystemParamItem<
             'w,
             '_,
             Self::Param,
@@ -270,6 +273,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
     ) -> RenderCommandResult {
         // A borrow check workaround.
         let mesh_allocator = mesh_allocator.into_inner();
+        let instance_buffer = instance_buffer.into_inner();
 
         let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(item.main_entity())
         else {
@@ -279,13 +283,14 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
             return RenderCommandResult::Skip;
         };
 
-        let Some(instance_buffer) = instance_buffer else {
-            return RenderCommandResult::Skip;
-        };
-
         if instance_buffer.length == 0 {
             return RenderCommandResult::Skip;
         }
+
+        let Some(i_buffer) = &instance_buffer.buffer else {
+            return RenderCommandResult::Skip;
+        };
+
         let Some(bind_group) = &bind_group.into_inner().0 else {
             return RenderCommandResult::Skip;
         };
@@ -297,7 +302,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
         };
 
         pass.set_vertex_buffer(0, vertex_buffer_slice.buffer.slice(..));
-        pass.set_vertex_buffer(1, instance_buffer.buffer.slice(..));
+        pass.set_vertex_buffer(1, i_buffer.slice(..));
 
         pass.set_bind_group(3, bind_group, &[]);
 
