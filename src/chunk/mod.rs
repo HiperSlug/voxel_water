@@ -1,16 +1,13 @@
-mod double_buffered;
 pub mod index;
 mod liquid_tick;
-pub mod masks;
 mod row;
 
-use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
+use std::mem;
 
-use index::Index3d;
-use masks::Masks;
+use index::{Index2d, Index3d};
 
-pub use masks::PAD_MASK;
+pub use row::*;
 
 pub const BITS: u32 = 6;
 
@@ -19,11 +16,8 @@ pub const LEN_U32: u32 = LEN as u32;
 pub const AREA: usize = LEN * LEN;
 pub const VOL: usize = LEN * LEN * LEN;
 
-pub type Mask = [u64; AREA];
 pub type Voxels = [Option<Voxel>; VOL];
-
-pub const DEFAULT_MASK: Mask = [0; AREA];
-pub const DEFAULT_VOXELS: Voxels = [None; VOL];
+pub type Masks = [RowMasks; AREA];
 
 // TODO: runtime enumeration/indexing
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,34 +29,55 @@ pub enum Voxel {
 pub struct Chunk {
     pub voxels: Voxels,
     pub masks: Masks,
-    pub dst_to_src: HashMap<usize, usize>,
 }
 
 impl Default for Chunk {
     fn default() -> Self {
         Self {
-            voxels: DEFAULT_VOXELS,
-            masks: default(),
-            dst_to_src: default(),
+            voxels: [default(); VOL],
+            masks: [default(); AREA],
         }
     }
 }
 
 impl Chunk {
-    pub fn set(&mut self, p: impl Index3d, v: Option<Voxel>) {
-        self.voxels[p.i_3d()] = v;
+    pub fn transfer(&mut self, dst: impl Index3d, src: impl Index3d) {
+        let src_i_3d = src.i_3d();
+        let dst_i_3d = dst.i_3d();
+        let (src_x, src_i_2d) = src.x_and_i_2d();
+        let (dst_x, dst_i_2d) = dst.x_and_i_2d();
 
-        self.masks.set(p, v);
+        let voxel = mem::take(&mut self.voxels[src_i_3d]);
+        self.voxels[dst_i_3d] = voxel;
+
+        self.masks[dst_i_2d].clear(dst_x);
+
+        self.masks[dst_i_2d].occupied |= ((self.masks[src_i_2d].occupied >> src_x) & 1) << dst_x;
+        self.masks[dst_i_2d].liquid |= ((self.masks[src_i_2d].liquid >> src_x) & 1) << dst_x;
+        self.masks[dst_i_2d].opaque |= ((self.masks[src_i_2d].opaque >> src_x) & 1) << dst_x;
+        self.masks[dst_i_2d].transparent |=
+            ((self.masks[src_i_2d].transparent >> src_x) & 1) << dst_x;
+
+        self.masks[src_i_2d].clear(src_x);
+    }
+
+    pub fn set(&mut self, p: impl Index3d, v: Option<Voxel>) {
+        let i_3d = p.i_3d();
+        let (x, i_2d) = p.x_and_i_2d();
+
+        self.voxels[i_3d] = v;
+        self.masks[i_2d].set(x, v);
     }
 
     pub fn fill_padding(&mut self, v: Option<Voxel>) {
         // +-Z
         for z in [0, LEN_U32 - 1] {
             for y in 0..LEN_U32 {
-                self.masks.fill_row([y, z], v);
+                let i_2d = [y, z].i_2d();
+                self.masks[i_2d].fill(v);
                 for x in 0..LEN_U32 {
-                    let i = [x, y, z].i_3d();
-                    self.voxels[i] = v;
+                    let i_3d = [x, y, z].i_3d();
+                    self.voxels[i_3d] = v;
                 }
             }
         }
@@ -70,10 +85,11 @@ impl Chunk {
         // +-Y
         for z in 1..LEN_U32 - 1 {
             for y in [0, LEN_U32 - 1] {
-                self.masks.fill_row([y, z], v);
+                let i_2d = [y, z].i_2d();
+                self.masks[i_2d].fill(v);
                 for x in 0..LEN_U32 {
-                    let i = [x, y, z].i_3d();
-                    self.voxels[i] = v;
+                    let i_3d = [x, y, z].i_3d();
+                    self.voxels[i_3d] = v;
                 }
             }
         }
@@ -81,10 +97,11 @@ impl Chunk {
         // +-X
         for z in 1..LEN_U32 - 1 {
             for y in 1..LEN_U32 - 1 {
-                self.masks.set_row_padding([y, z], v);
+                let i_2d = [y, z].i_2d();
+                self.masks[i_2d].fill_padding(v);
                 for x in [0, LEN_U32 - 1] {
-                    let i = [x, y, z].i_3d();
-                    self.voxels[i] = v;
+                    let i_3d = [x, y, z].i_3d();
+                    self.voxels[i_3d] = v;
                 }
             }
         }
@@ -109,7 +126,9 @@ impl Chunk {
             if in_unpad_bounds {
                 let pos = pos.as_uvec3();
 
-                if self.masks.is_some(pos) {
+                let (x, i_2d) = pos.x_and_i_2d();
+
+                if self.masks[i_2d].is_occupied(x) {
                     return [last, Some(pos)];
                 }
 

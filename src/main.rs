@@ -14,6 +14,7 @@ use bevy::core_pipeline::Skybox;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
+use dashmap::DashMap;
 
 use crate::chunk::{BoxChunk, Voxel};
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
@@ -131,16 +132,25 @@ fn setup(
     commands.set_state(GameState::NotSetup);
 }
 
-fn liquid_tick(chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>, mut tick: Local<u64>) {
+fn liquid_tick(
+    chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>,
+    mut tick: Local<u64>,
+    dst_to_src: Local<DashMap<usize, usize>>,
+) {
     let (mut chunk, mut changes) = chunk.into_inner();
 
-    chunk.liquid_tick(*tick);
-    chunk.masks.dblt_masks.copy_back_to_front();
+    chunk.collect_moves(&dst_to_src, *tick);
 
-    for (dst, src) in chunk.dst_to_src.drain() {
+    for k_v in dst_to_src.iter() {
+        let (&dst, &src) = k_v.pair();
+
+        chunk.transfer(dst, src);
+
         changes.push(dst);
         changes.push(src);
     }
+
+    dst_to_src.clear();
 
     *tick += 1;
 }

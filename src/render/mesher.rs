@@ -46,9 +46,6 @@ pub struct InnerMesher {
 
 impl InnerMesher {
     fn build_all_visible_masks(&mut self, chunk: &Chunk) {
-        let some_mask = chunk.masks.some_mask();
-        let transparent_mask = &chunk.masks.transparent_mask;
-
         for f in Face::ALL {
             let visible_mask = &mut self.visible_masks[f];
 
@@ -65,28 +62,27 @@ impl InnerMesher {
                 for y in 1..LEN_U32 - 1 {
                     let i_2d = [y, z].i_2d();
 
-                    let pad_some = some_mask[i_2d];
-                    let transparent = transparent_mask[i_2d] & !PAD_MASK;
-                    let some = pad_some & !PAD_MASK;
+                    let pad_opaque = chunk.masks[i_2d].opaque;
+                    let transparent = chunk.masks[i_2d].transparent & !PAD_MASK;
+                    let opaque = pad_opaque & !PAD_MASK;
 
-                    if some == 0 {
+                    if opaque == 0 && transparent == 0 {
                         visible_mask[i_2d] = 0;
                         continue;
                     }
 
-                    let adj_some = match f {
-                        PosX => pad_some >> 1,
-                        PosY => some_mask[i_2d + STRIDE_Y_2D],
-                        PosZ => some_mask[i_2d + STRIDE_Z_2D],
-                        NegX => pad_some << 1,
-                        NegY => some_mask[i_2d - STRIDE_Y_2D],
-                        NegZ => some_mask[i_2d - STRIDE_Z_2D],
+                    let adj_opaque = match f {
+                        PosX => pad_opaque >> 1,
+                        PosY => chunk.masks[i_2d + STRIDE_Y_2D].opaque,
+                        PosZ => chunk.masks[i_2d + STRIDE_Z_2D].opaque,
+                        NegX => pad_opaque << 1,
+                        NegY => chunk.masks[i_2d - STRIDE_Y_2D].opaque,
+                        NegZ => chunk.masks[i_2d - STRIDE_Z_2D].opaque,
                     };
 
-                    visible_mask[i_2d] = some & !adj_some;
+                    visible_mask[i_2d] = opaque & !adj_opaque;
 
-                    for x in BitIter::from(transparent) {
-                        // perhaps only iter over `transparent & adj_transparent`
+                    for x in BitIter::from(transparent & !adj_opaque) {
                         let i_3d = (x, i_2d).i_3d();
                         let adj_i_3d = i_3d.wrapping_add_signed(offset);
 
@@ -103,33 +99,54 @@ impl InnerMesher {
     }
 
     fn build_visible_masks(&mut self, chunk: &Chunk, remesh: U64Vec3) {
-        let some_mask = chunk.masks.some_mask();
-
         let other_z = !remesh.z & !PAD_MASK;
         let other_y = !remesh.y & !PAD_MASK;
 
         for f in Face::ALL {
+            let offset = match f {
+                PosX => I_STRIDE_X_3D,
+                PosY => I_STRIDE_Y_3D,
+                PosZ => I_STRIDE_Z_3D,
+                NegX => -I_STRIDE_X_3D,
+                NegY => -I_STRIDE_Y_3D,
+                NegZ => -I_STRIDE_Z_3D,
+            };
+
             let visible_mask = &mut self.visible_masks[f];
 
             let mut handler = |y: u32, z: u32, xs: u64| {
                 let i_2d = [y, z].i_2d();
 
-                let some = some_mask[i_2d];
-                let unpad_some = some & !PAD_MASK & xs;
+                let pad_opaque = chunk.masks[i_2d].opaque & xs;
+                let transparent = chunk.masks[i_2d].transparent & !PAD_MASK & xs;
+                let opaque = pad_opaque & !PAD_MASK;
 
-                if unpad_some == 0 {
+                if opaque == 0 && transparent == 0 {
                     visible_mask[i_2d] = 0;
-                } else {
-                    let adj_some = match f {
-                        PosX => some >> 1,
-                        PosY => some_mask[i_2d + STRIDE_Y_2D],
-                        PosZ => some_mask[i_2d + STRIDE_Z_2D],
-                        NegX => some << 1,
-                        NegY => some_mask[i_2d - STRIDE_Y_2D],
-                        NegZ => some_mask[i_2d - STRIDE_Z_2D],
-                    };
+                    return;
+                }
 
-                    visible_mask[i_2d] = unpad_some & !adj_some;
+                let adj_opaque = match f {
+                    PosX => pad_opaque >> 1,
+                    PosY => chunk.masks[i_2d + STRIDE_Y_2D].opaque,
+                    PosZ => chunk.masks[i_2d + STRIDE_Z_2D].opaque,
+                    NegX => pad_opaque << 1,
+                    NegY => chunk.masks[i_2d - STRIDE_Y_2D].opaque,
+                    NegZ => chunk.masks[i_2d - STRIDE_Z_2D].opaque,
+                };
+
+                visible_mask[i_2d] = opaque & !adj_opaque;
+
+                for x in BitIter::from(transparent & !adj_opaque) {
+                    let i_3d = (x, i_2d).i_3d();
+                    let adj_i_3d = i_3d.wrapping_add_signed(offset);
+
+                    let voxel_opt = chunk.voxels[i_3d];
+                    let adj_voxel_opt = chunk.voxels[adj_i_3d];
+
+                    let ne = voxel_opt != adj_voxel_opt;
+                    let bit = (ne as u64) << x;
+                    visible_mask[i_2d] |= bit;
                 }
             };
 
@@ -419,6 +436,7 @@ impl Mesher {
         self.build_visible_masks(chunk, remesh);
 
         for f in Face::ALL {
+            self.quads.clear();
             let quads = &mut mesh[f];
             match f {
                 PosX | NegX => {
@@ -435,8 +453,6 @@ impl Mesher {
 
                         quads.splice(dst_range, replace_with);
                     }
-
-                    self.quads.clear();
                 }
                 PosY | NegY => {
                     self.inner.merge_y(
@@ -457,8 +473,6 @@ impl Mesher {
 
                         quads.splice(dst_range, replace_with);
                     }
-
-                    self.quads.clear();
                 }
                 PosZ | NegZ => {
                     self.inner.merge_z(
@@ -479,8 +493,6 @@ impl Mesher {
 
                         quads.splice(dst_range, replace_with);
                     }
-
-                    self.quads.clear();
                 }
             }
         }
