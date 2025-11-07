@@ -9,6 +9,8 @@ use index::{Index2d, Index3d};
 
 pub use row::*;
 
+use crate::block::BlockIndex;
+
 pub const BITS: u32 = 6;
 
 pub const LEN: usize = 1 << BITS; // 64
@@ -16,19 +18,9 @@ pub const LEN_U32: u32 = LEN as u32;
 pub const AREA: usize = LEN * LEN;
 pub const VOL: usize = LEN * LEN * LEN;
 
-pub type Voxels = [Option<Voxel>; VOL];
-pub type Masks = [RowMasks; AREA];
-
-// TODO: runtime enumeration/indexing
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Voxel {
-    Liquid,
-    Solid,
-}
-
 pub struct Chunk {
-    pub voxels: Voxels,
-    pub masks: Masks,
+    pub voxels: [Option<BlockIndex>; VOL],
+    pub masks: [RowMasks; AREA],
 }
 
 impl Default for Chunk {
@@ -42,42 +34,62 @@ impl Default for Chunk {
 
 impl Chunk {
     pub fn transfer(&mut self, dst: impl Index3d, src: impl Index3d) {
-        let src_i_3d = src.i_3d();
-        let dst_i_3d = dst.i_3d();
-        let (src_x, src_i_2d) = src.x_and_i_2d();
-        let (dst_x, dst_i_2d) = dst.x_and_i_2d();
+        let (src_i_3d, src_x, src_i_2d) = src.i_3d_and_x_and_i_2d();
+        let (dst_i_3d, dst_x, dst_i_2d) = dst.i_3d_and_x_and_i_2d();
 
-        let voxel = mem::take(&mut self.voxels[src_i_3d]);
-        self.voxels[dst_i_3d] = voxel;
+        self.voxels[dst_i_3d] = mem::take(&mut self.voxels[src_i_3d]);
 
-        self.masks[dst_i_2d].clear(dst_x);
+        self.masks[dst_i_2d].remove(dst_x);
 
-        self.masks[dst_i_2d].occupied |= ((self.masks[src_i_2d].occupied >> src_x) & 1) << dst_x;
-        self.masks[dst_i_2d].liquid |= ((self.masks[src_i_2d].liquid >> src_x) & 1) << dst_x;
-        self.masks[dst_i_2d].opaque |= ((self.masks[src_i_2d].opaque >> src_x) & 1) << dst_x;
-        self.masks[dst_i_2d].transparent |=
-            ((self.masks[src_i_2d].transparent >> src_x) & 1) << dst_x;
+        let copy = |src: u64, dst: &mut u64| {
+            *dst |= ((src >> src_x) & 1) << dst_x;
+        };
 
-        self.masks[src_i_2d].clear(src_x);
+        copy(
+            self.masks[src_i_2d].occupied,
+            &mut self.masks[dst_i_2d].occupied,
+        );
+        copy(
+            self.masks[src_i_2d].liquid,
+            &mut self.masks[dst_i_2d].liquid,
+        );
+        copy(
+            self.masks[src_i_2d].opaque,
+            &mut self.masks[dst_i_2d].opaque,
+        );
+        copy(
+            self.masks[src_i_2d].transparent,
+            &mut self.masks[dst_i_2d].transparent,
+        );
+
+        self.masks[src_i_2d].remove(src_x);
     }
 
-    pub fn set(&mut self, p: impl Index3d, v: Option<Voxel>) {
+    pub fn set(&mut self, p: impl Index3d, voxel: BlockIndex) {
         let i_3d = p.i_3d();
         let (x, i_2d) = p.x_and_i_2d();
 
-        self.voxels[i_3d] = v;
-        self.masks[i_2d].set(x, v);
+        self.voxels[i_3d] = Some(voxel);
+        self.masks[i_2d].set(x, voxel);
     }
 
-    pub fn fill_padding(&mut self, v: Option<Voxel>) {
+    pub fn remove(&mut self, p: impl Index3d) {
+        let i_3d = p.i_3d();
+        let (x, i_2d) = p.x_and_i_2d();
+
+        self.voxels[i_3d] = None;
+        self.masks[i_2d].remove(x);
+    }
+
+    pub fn fill_padding(&mut self, voxel: BlockIndex) {
         // +-Z
         for z in [0, LEN_U32 - 1] {
             for y in 0..LEN_U32 {
                 let i_2d = [y, z].i_2d();
-                self.masks[i_2d].fill(v);
+                self.masks[i_2d].fill(voxel);
                 for x in 0..LEN_U32 {
                     let i_3d = [x, y, z].i_3d();
-                    self.voxels[i_3d] = v;
+                    self.voxels[i_3d] = Some(voxel);
                 }
             }
         }
@@ -86,10 +98,10 @@ impl Chunk {
         for z in 1..LEN_U32 - 1 {
             for y in [0, LEN_U32 - 1] {
                 let i_2d = [y, z].i_2d();
-                self.masks[i_2d].fill(v);
+                self.masks[i_2d].fill(voxel);
                 for x in 0..LEN_U32 {
                     let i_3d = [x, y, z].i_3d();
-                    self.voxels[i_3d] = v;
+                    self.voxels[i_3d] = Some(voxel);
                 }
             }
         }
@@ -98,10 +110,10 @@ impl Chunk {
         for z in 1..LEN_U32 - 1 {
             for y in 1..LEN_U32 - 1 {
                 let i_2d = [y, z].i_2d();
-                self.masks[i_2d].fill_padding(v);
+                self.masks[i_2d].fill_padding(voxel);
                 for x in [0, LEN_U32 - 1] {
                     let i_3d = [x, y, z].i_3d();
-                    self.voxels[i_3d] = v;
+                    self.voxels[i_3d] = Some(voxel);
                 }
             }
         }

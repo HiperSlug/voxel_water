@@ -22,8 +22,8 @@ struct TextureArrayHandles(Vec<Handle<Image>>);
 
 fn init_handles(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(TextureArrayHandles(vec![
-        load_embedded_asset!(&*asset_server, "glass.png"),
         load_embedded_asset!(&*asset_server, "claws.png"),
+        load_embedded_asset!(&*asset_server, "glass.png"),
     ]));
 }
 

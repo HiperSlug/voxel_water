@@ -7,7 +7,10 @@ use std::ops::Range;
 
 use super::*;
 
-use crate::chunk::{AREA, Chunk, LEN, LEN_U32, PAD_MASK, Voxel, index::*};
+use crate::{
+    block::BLOCKS,
+    chunk::{AREA, Chunk, LEN, LEN_U32, PAD_MASK, index::*},
+};
 
 const UPWARD_STRIDE_X: usize = STRIDE_X_3D;
 const FORWARD_STRIDE_X: usize = STRIDE_X_3D;
@@ -238,11 +241,7 @@ impl InnerMesher {
 
                         let pos = uvec3(x, y, z).as_ivec3() + origin;
 
-                        // TODO: change placeholder
-                        let t = match voxel {
-                            Voxel::Liquid => 0,
-                            Voxel::Solid => 1,
-                        };
+                        let t = BLOCKS[voxel].textures[f] as u32;
 
                         Quad::new(pos, w, h, f, t)
                     });
@@ -322,10 +321,7 @@ impl InnerMesher {
 
                         let pos = uvec3(x, y, z).as_ivec3() + origin;
 
-                        let t = match voxel {
-                            Voxel::Liquid => 0,
-                            Voxel::Solid => 1,
-                        };
+                        let t = BLOCKS[voxel].textures[f] as u32;
 
                         Quad::new(pos, w, h, f, t)
                     });
@@ -403,10 +399,7 @@ impl InnerMesher {
 
                         let pos = uvec3(x, y, z).as_ivec3() + origin;
 
-                        let t = match voxel {
-                            Voxel::Liquid => 0,
-                            Voxel::Solid => 1,
-                        };
+                        let t = BLOCKS[voxel].textures[f] as u32;
 
                         Quad::new(pos, w, h, f, t)
                     });

@@ -71,7 +71,7 @@ impl ChunkMesh {
 
     #[inline]
     pub fn quads(&self) -> impl Iterator<Item = &Quad> {
-        self.0.values().flat_map(|v| v.iter())
+        self.0.values().flat_map(|vec| vec.iter())
     }
 }
 

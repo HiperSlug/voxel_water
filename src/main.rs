@@ -16,7 +16,8 @@ use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
 use dashmap::DashMap;
 
-use crate::chunk::{BoxChunk, Voxel};
+use crate::block::NOT_WATER;
+use crate::chunk::BoxChunk;
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::input::{GameInputPlugin, SelectedMarker};
 use crate::jumpscare::JumpscarePlugin;
@@ -114,7 +115,7 @@ fn setup(
 
     // chunk
     let mut chunk = BoxChunk::default();
-    chunk.fill_padding(Some(Voxel::Solid));
+    chunk.fill_padding(NOT_WATER);
     let mesh = MESHER.with_borrow_mut(|mesher| mesher.mesh(&chunk, IVec3::ZERO));
     commands.spawn((
         chunk,

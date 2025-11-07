@@ -1,6 +1,4 @@
-// TODO: runtime enumeration
-
-use super::Voxel;
+use crate::block::{BLOCKS, BlockIndex};
 
 pub const PAD_MASK: u64 = (1 << 63) | 1;
 
@@ -16,7 +14,17 @@ pub struct RowMasks {
 
 impl RowMasks {
     #[inline]
-    pub fn clear(&mut self, x: u32) {
+    pub fn set(&mut self, x: u32, voxel: BlockIndex) {
+        let block = &BLOCKS[voxel];
+
+        self.occupied.set_bit(x, true);
+        self.liquid.set_bit(x, block.liquid);
+        self.opaque.set_bit(x, !block.transparent);
+        self.transparent.set_bit(x, block.transparent);
+    }
+
+    #[inline]
+    pub fn remove(&mut self, x: u32) {
         self.occupied.set_bit(x, false);
         self.liquid.set_bit(x, false);
         self.opaque.set_bit(x, false);
@@ -24,72 +32,31 @@ impl RowMasks {
     }
 
     #[inline]
-    pub fn set(&mut self, x: u32, v: Option<Voxel>) {
-        match v {
-            Some(Voxel::Liquid) => {
-                self.occupied.set_bit(x, true);
-                self.liquid.set_bit(x, true);
-                self.opaque.set_bit(x, false);
-                self.transparent.set_bit(x, true);
-            }
-            Some(_) => {
-                self.occupied.set_bit(x, true);
-                self.liquid.set_bit(x, false);
-                self.opaque.set_bit(x, true);
-                self.transparent.set_bit(x, false);
-            }
-            None => {
-                self.clear(x);
-            }
-        }
+    pub fn fill(&mut self, voxel: BlockIndex) {
+        let block = &BLOCKS[voxel];
+
+        self.occupied = !0;
+        self.liquid.set_mask(!0, block.liquid);
+        self.opaque.set_mask(!0, !block.transparent);
+        self.transparent.set_mask(!0, block.transparent);
     }
 
-    #[inline]
-    pub fn fill(&mut self, v: Option<Voxel>) {
-        match v {
-            Some(Voxel::Liquid) => {
-                self.occupied = !0;
-                self.liquid = !0;
-                self.opaque = 0;
-                self.transparent = !0;
-            }
-            Some(_) => {
-                self.occupied = !0;
-                self.liquid = 0;
-                self.opaque = !0;
-                self.transparent = 0;
-            }
-            None => {
-                self.occupied = 0;
-                self.liquid = 0;
-                self.opaque = 0;
-                self.transparent = 0;
-            }
-        }
-    }
+    // #[inline]
+    // pub fn clear(&mut self) {
+    //     self.occupied = 0;
+    //     self.liquid = 0;
+    //     self.opaque = 0;
+    //     self.transparent = 0;
+    // }
 
     #[inline]
-    pub fn fill_padding(&mut self, v: Option<Voxel>) {
-        match v {
-            Some(Voxel::Liquid) => {
-                self.occupied.set_mask(PAD_MASK, true);
-                self.liquid.set_mask(PAD_MASK, true);
-                self.opaque.set_mask(PAD_MASK, false);
-                self.transparent.set_mask(PAD_MASK, true);
-            }
-            Some(_) => {
-                self.occupied.set_mask(PAD_MASK, true);
-                self.liquid.set_mask(PAD_MASK, false);
-                self.opaque.set_mask(PAD_MASK, true);
-                self.transparent.set_mask(PAD_MASK, false);
-            }
-            None => {
-                self.occupied.set_mask(PAD_MASK, false);
-                self.liquid.set_mask(PAD_MASK, false);
-                self.opaque.set_mask(PAD_MASK, false);
-                self.transparent.set_mask(PAD_MASK, false);
-            }
-        }
+    pub fn fill_padding(&mut self, voxel: BlockIndex) {
+        let block = &BLOCKS[voxel];
+
+        self.occupied.set_mask(PAD_MASK, true);
+        self.liquid.set_mask(PAD_MASK, block.liquid);
+        self.opaque.set_mask(PAD_MASK, !block.transparent);
+        self.transparent.set_mask(PAD_MASK, block.transparent);
     }
 
     #[inline]

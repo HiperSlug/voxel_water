@@ -2,7 +2,8 @@ use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use std::time::Duration;
 
-use crate::chunk::{BoxChunk, Voxel};
+use crate::block::{NOT_WATER, WATER};
+use crate::chunk::BoxChunk;
 use crate::flycam::FlyCam;
 use crate::render::ChunkMeshChanges;
 
@@ -44,14 +45,14 @@ fn chunk_input(
     if input.pressed(MouseButton::Middle)
         && let Some(p) = prev
     {
-        chunk.set(p, Some(Voxel::Liquid));
+        chunk.set(p, WATER);
         changes.push(p);
     }
 
     if input.just_pressed(MouseButton::Left)
         && let Some(p) = dst
     {
-        chunk.set(p, None);
+        chunk.remove(p);
         changes.push(p);
     }
 
@@ -63,21 +64,21 @@ fn chunk_input(
             for z in [min.z, max.z] {
                 for y in min.y..=max.y {
                     for x in min.x..=max.x {
-                        chunk.set([x, y, z], Some(Voxel::Solid));
+                        chunk.set([x, y, z], NOT_WATER);
                         changes.push([x, y, z]);
                     }
                 }
             }
             for z in min.z + 1..=max.z - 1 {
                 for x in min.x..=max.x {
-                    chunk.set([x, min.y, z], Some(Voxel::Solid));
+                    chunk.set([x, min.y, z], NOT_WATER);
                     changes.push([x, min.y, z]);
                 }
             }
             for z in min.z + 1..=max.z - 1 {
                 for y in min.y + 1..=max.y {
                     for x in [min.x, max.x] {
-                        chunk.set([x, y, z], Some(Voxel::Solid));
+                        chunk.set([x, y, z], NOT_WATER);
                         changes.push([x, y, z]);
                     }
                 }

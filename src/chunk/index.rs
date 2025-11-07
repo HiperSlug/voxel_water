@@ -28,6 +28,19 @@ pub trait Index2d: Copy {
     fn yz(&self) -> [u32; 2];
 }
 
+pub trait Index3d: Copy {
+    fn i_3d(&self) -> usize;
+
+    fn x_and_i_2d(&self) -> (u32, usize);
+
+    fn xyz(&self) -> [u32; 3];
+
+    fn i_3d_and_x_and_i_2d(&self) -> (usize, u32, usize) {
+        let (x, i_2d) = self.x_and_i_2d();
+        (self.i_3d(), x, i_2d)
+    }
+}
+
 impl Index2d for usize {
     #[inline]
     fn i_2d(&self) -> usize {
@@ -62,14 +75,6 @@ impl Index2d for UVec2 {
     fn yz(&self) -> [u32; 2] {
         self.to_array()
     }
-}
-
-pub trait Index3d: Copy {
-    fn i_3d(&self) -> usize;
-
-    fn x_and_i_2d(&self) -> (u32, usize);
-
-    fn xyz(&self) -> [u32; 3];
 }
 
 impl Index3d for usize {
