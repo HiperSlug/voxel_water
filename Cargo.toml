@@ -25,4 +25,5 @@ dashmap = { version = "6.1.0", features = ["inline", "rayon"] }
 enum-map = "2.7.3"
 ndshape = "0.3.0"
 nonmax = "0.5.5"
+offset-allocator = "0.2.0"
 rand = "0.9.2"

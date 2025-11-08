@@ -148,6 +148,5 @@ fn fragment(
     pbr_input.N = normalize(pbr_input.world_normal);
 
     pbr_input.V = fns::calculate_view(in.world_position, pbr_input.is_orthographic);
-
     return tone_mapping(fns::apply_pbr_lighting(pbr_input), view.color_grading);
 }

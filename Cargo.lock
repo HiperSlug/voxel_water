@@ -4658,6 +4658,7 @@ dependencies = [
  "enum-map",
  "ndshape",
  "nonmax",
+ "offset-allocator",
  "rand",
 ]
 
