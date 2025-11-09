@@ -221,7 +221,7 @@ impl InnerMesher {
                     if (upward_visible >> x) & 1 != 0
                         && self.forward_merged[forward_i]
                             == self.forward_merged[forward_i + FORWARD_STRIDE_Y]
-                        && voxel_opt != chunk.voxels[i_3d + STRIDE_Y_3D]
+                        && voxel_opt == chunk.voxels[i_3d + STRIDE_Y_3D]
                     {
                         self.forward_merged[forward_i] = 0;
                         self.upward_merged[upward_i] += 1;
