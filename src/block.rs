@@ -8,7 +8,7 @@ use std::{
     sync::LazyLock,
 };
 
-use crate::render::Face;
+use crate::render::*;
 
 pub static BLOCKS: LazyLock<Blocks> = LazyLock::new(temp);
 
@@ -47,8 +47,9 @@ impl BlockIndex {
     }
 }
 
-pub const NOT_WATER: BlockIndex = BlockIndex(unsafe { NonMaxU16::new_unchecked(0) });
+pub const GRASS: BlockIndex = BlockIndex(unsafe { NonMaxU16::new_unchecked(0) });
 pub const WATER: BlockIndex = BlockIndex(unsafe { NonMaxU16::new_unchecked(1) });
+pub const DIRT: BlockIndex = BlockIndex(unsafe { NonMaxU16::new_unchecked(2) });
 
 pub fn temp() -> Blocks {
     Blocks(vec![
@@ -56,15 +57,24 @@ pub fn temp() -> Blocks {
             liquid: false,
             transparent: false,
             textures: enum_map! {
-                _ => 0
+                PosX | NegX | PosZ | NegZ => 1,
+                PosY => 0,
+                NegY => 2,
             },
         },
         Block {
             liquid: true,
             transparent: true,
             textures: enum_map! {
-                _ => 1
+                _ => 3
             },
         },
+        Block {
+            liquid: false,
+            transparent: false,
+            textures: enum_map! {
+                _ => 2,
+            }
+        }
     ])
 }

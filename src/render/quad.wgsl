@@ -1,4 +1,7 @@
 #import bevy_pbr::mesh_functions::{get_world_from_local, mesh_position_local_to_clip}
+#import bevy_pbr::oit::oit_draw
+#import bevy_pbr::forward_io::FragmentOutput;
+#import bevy_pbr::pbr_types;
 
 const MASK6: u32 = (1 << 6) - 1;
 const MASK3: u32 = (1 << 3) - 1;
@@ -122,7 +125,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
 #import bevy_pbr::{
     mesh_view_bindings::view,
-    pbr_types::{PbrInput, pbr_input_new},
+    pbr_types::{PbrInput, pbr_input_new, STANDARD_MATERIAL_FLAGS_ALPHA_MODE_OPAQUE, STANDARD_MATERIAL_FLAGS_ALPHA_MODE_RESERVED_BITS},
     pbr_functions as fns,
     pbr_bindings,
 }
@@ -134,7 +137,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 @fragment
 fn fragment(
     in: VertexOutput,
-) -> @location(0) vec4<f32> {
+) -> FragmentOutput {
     var pbr_input: PbrInput = pbr_input_new();
 
     pbr_input.material.base_color = textureSample(my_array_texture, my_array_texture_sampler, in.uv, in.texture);
@@ -148,5 +151,9 @@ fn fragment(
     pbr_input.N = normalize(pbr_input.world_normal);
 
     pbr_input.V = fns::calculate_view(in.world_position, pbr_input.is_orthographic);
-    return tone_mapping(fns::apply_pbr_lighting(pbr_input), view.color_grading);
+    var out: FragmentOutput;
+    out.color = fns::apply_pbr_lighting(pbr_input);
+    out.color = fns::main_pass_post_lighting_processing(pbr_input, out.color); 
+    
+    return out;
 }

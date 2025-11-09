@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::prelude::*;
 use bevy_tweening::{Lens, Tween, TweenAnim, TweeningPlugin};

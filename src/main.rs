@@ -16,11 +16,11 @@ use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
 use dashmap::DashMap;
 
-use crate::block::NOT_WATER;
+use crate::block::DIRT;
 use crate::chunk::BoxChunk;
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::input::{GameInputPlugin, SelectedMarker};
-use crate::jumpscare::JumpscarePlugin;
+// use crate::jumpscare::JumpscarePlugin;
 use crate::render::mesher::MESHER;
 use crate::render::pipeline::{QuadInstancingPlugin, TextureArrayMaterial};
 use crate::render::{ChunkMesh, ChunkMeshChanges};
@@ -40,7 +40,7 @@ impl Plugin for Game {
             NoCameraPlayerPlugin,
             GameInputPlugin,
             QuadInstancingPlugin,
-            JumpscarePlugin,
+            // JumpscarePlugin,
             SkyboxImagePlugin,
             TextureArrayPlugin,
         ));
@@ -93,6 +93,7 @@ fn setup(
             brightness: 1000.0,
             ..default()
         },
+        // Msaa::Off,
         Camera3d::default(),
         FlyCam,
         NoIndirectDrawing, // TODO: what does this do?
@@ -115,7 +116,7 @@ fn setup(
 
     // chunk
     let mut chunk = BoxChunk::default();
-    chunk.fill_padding(NOT_WATER);
+    chunk.fill_padding(DIRT);
     let mesh = MESHER.with_borrow_mut(|mesher| mesher.mesh(&chunk, IVec3::ZERO));
     commands.spawn((
         chunk,

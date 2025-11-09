@@ -9,8 +9,10 @@ pub struct TextureArrayPlugin;
 
 impl Plugin for TextureArrayPlugin {
     fn build(&self, app: &mut App) {
-        embedded_asset!(app, "claws.png");
-        embedded_asset!(app, "glass.png");
+        embedded_asset!(app, "grass_top.png");
+        embedded_asset!(app, "grass_side.png");
+        embedded_asset!(app, "dirt.png");
+        embedded_asset!(app, "diamond.png");
 
         app.add_systems(Startup, init_handles)
             .add_systems(Update, texture_array);
@@ -22,8 +24,10 @@ struct TextureArrayHandles(Vec<Handle<Image>>);
 
 fn init_handles(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.insert_resource(TextureArrayHandles(vec![
-        load_embedded_asset!(&*asset_server, "claws.png"),
-        load_embedded_asset!(&*asset_server, "glass.png"),
+        load_embedded_asset!(&*asset_server, "grass_top.png"),
+        load_embedded_asset!(&*asset_server, "grass_side.png"),
+        load_embedded_asset!(&*asset_server, "dirt.png"),
+        load_embedded_asset!(&*asset_server, "diamond.png"),
     ]));
 }
 
@@ -39,6 +43,8 @@ fn texture_array(
         return;
     }
 
+    let size = image_assets.get(&handles.0.0[0]).unwrap().size().x;
+
     let data = handles
         .iter()
         .flat_map(|id| image_assets.get(id).unwrap().data.as_ref().unwrap())
@@ -47,8 +53,8 @@ fn texture_array(
 
     let mut image = Image::new(
         Extent3d {
-            width: 48,
-            height: 48,
+            width: size,
+            height: size,
             depth_or_array_layers: handles.len() as u32,
         },
         TextureDimension::D2,

@@ -2,7 +2,7 @@ use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use std::time::Duration;
 
-use crate::block::{NOT_WATER, WATER};
+use crate::block::{GRASS, DIRT, WATER};
 use crate::chunk::BoxChunk;
 use crate::flycam::FlyCam;
 use crate::render::ChunkMeshChanges;
@@ -62,25 +62,37 @@ fn chunk_input(
             let max = p.max(*anchor);
 
             for z in [min.z, max.z] {
-                for y in min.y..=max.y {
+                for y in min.y..=max.y - 1 {
                     for x in min.x..=max.x {
-                        chunk.set([x, y, z], NOT_WATER);
+                        chunk.set([x, y, z], DIRT);
                         changes.push([x, y, z]);
                     }
                 }
+                for x in min.x..=max.x {
+                    chunk.set([x, max.y, z], GRASS);
+                    changes.push([x, max.y, z]);
+                }
             }
             for z in min.z + 1..=max.z - 1 {
-                for x in min.x..=max.x {
-                    chunk.set([x, min.y, z], NOT_WATER);
+                for x in min.x + 1..=max.x - 1 {
+                    chunk.set([x, min.y, z], GRASS);
+                    changes.push([x, min.y, z]);
+                }
+                for x in [min.x, max.x] {
+                    chunk.set([x, min.y, z], DIRT);
                     changes.push([x, min.y, z]);
                 }
             }
             for z in min.z + 1..=max.z - 1 {
-                for y in min.y + 1..=max.y {
+                for y in min.y + 1..=max.y - 1 {
                     for x in [min.x, max.x] {
-                        chunk.set([x, y, z], NOT_WATER);
+                        chunk.set([x, y, z], DIRT);
                         changes.push([x, y, z]);
                     }
+                }
+                for x in [min.x, max.x] {
+                    chunk.set([x, max.y, z], GRASS);
+                    changes.push([x, max.y, z]);
                 }
             }
         }

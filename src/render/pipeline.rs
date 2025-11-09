@@ -104,7 +104,8 @@ impl SpecializedMeshPipeline for QuadInstancingPipeline {
                 },
             ],
         });
-        descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
+        let fragment = descriptor.fragment.as_mut().unwrap();
+        fragment.shader = self.shader.clone();
         descriptor.layout.push(self.layout.clone());
         Ok(descriptor)
     }
@@ -148,7 +149,7 @@ fn queue_quads(
 
         let msaa_key = MeshPipelineKey::from_msaa_samples(msaa.samples());
 
-        let view_key: MeshPipelineKey = msaa_key | MeshPipelineKey::from_hdr(view.hdr);
+        let view_key = msaa_key | MeshPipelineKey::from_hdr(view.hdr);
         let rangefinder = view.rangefinder3d();
         for (entity, main_entity) in &material_meshes {
             let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(*main_entity)
@@ -160,6 +161,8 @@ fn queue_quads(
             };
             let key =
                 view_key | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology());
+            
+            // let key = key | MeshPipelineKey::OIT_ENABLED | MeshPipelineKey::BLEND_ALPHA;
 
             let pipeline = pipelines
                 .specialize(&pipeline_cache, &custom_pipeline, key, &mesh.layout)
