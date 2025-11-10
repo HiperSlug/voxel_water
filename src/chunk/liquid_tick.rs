@@ -3,6 +3,8 @@ mod action;
 use bevy::platform::hash::FixedState;
 use bit_iter::BitIter;
 use dashmap::DashMap;
+use rand::{rng, seq::SliceRandom};
+use std::array;
 use std::hash::BuildHasher;
 
 use action::{ACTIONS, Action, DOWN_ACTION};
@@ -46,7 +48,9 @@ impl Chunk {
                 ];
 
                 for action_group in ACTIONS {
-                    for i in 0..4 {
+                    let mut is: [_; 4] = array::from_fn(|i| i);
+                    is.shuffle(&mut rng());
+                    for i in is {
                         for j in 0..4 {
                             let group = liquid & group_masks[(i + j) % 4];
                             if group == 0 {
