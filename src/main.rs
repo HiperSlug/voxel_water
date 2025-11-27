@@ -2,7 +2,6 @@ mod block;
 mod chunk;
 mod flycam;
 mod input;
-mod jumpscare;
 mod render;
 mod skybox;
 mod texture_array;
@@ -20,7 +19,6 @@ use crate::block::DIRT;
 use crate::chunk::BoxChunk;
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::input::{GameInputPlugin, SelectedMarker};
-// use crate::jumpscare::JumpscarePlugin;
 use crate::render::mesher::MESHER;
 use crate::render::pipeline::{QuadInstancingPlugin, TextureArrayMaterial};
 use crate::render::{ChunkMesh, ChunkMeshChanges};
@@ -40,7 +38,6 @@ impl Plugin for Game {
             NoCameraPlayerPlugin,
             GameInputPlugin,
             QuadInstancingPlugin,
-            // JumpscarePlugin,
             SkyboxImagePlugin,
             TextureArrayPlugin,
         ));
