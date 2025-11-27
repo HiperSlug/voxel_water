@@ -1,13 +1,14 @@
 mod action;
 
-use bevy::platform::hash::FixedState;
-use bit_iter::BitIter;
-use dashmap::DashMap;
-use rand::{rng, seq::SliceRandom};
 use std::array;
 use std::hash::BuildHasher;
 
 use action::{ACTIONS, Action, DOWN_ACTION};
+use bevy::platform::hash::FixedState;
+use bit_iter::BitIter;
+use dashmap::DashMap;
+use rand::rng;
+use rand::seq::SliceRandom;
 
 use super::index::{Index2d, Index3d};
 use super::{Chunk, LEN_U32, PAD_MASK};
@@ -98,8 +99,6 @@ impl Chunk {
 
         let try_move = group & prereq_mask & !self.masks[dst_i_2d].occupied.inv_shift(d_x);
 
-        let mut moved = try_move;
-
         for x in BitIter::from(try_move) {
             let src_i_3d = (x, src_i_2d).i_3d();
             let dst_i_3d = src_i_3d.wrapping_add_signed(d_i_3d);
@@ -112,14 +111,12 @@ impl Chunk {
 
                     if priority > other_priority {
                         *other_src_i_3d = src_i_3d;
-                    } else {
-                        moved &= !(1 << x);
                     }
                 })
                 .or_insert(src_i_3d);
         }
 
-        moved
+        try_move
     }
 }
 

@@ -1,12 +1,12 @@
 pub mod mesher;
 pub mod pipeline;
 
-use bevy::{math::U64Vec3, prelude::*};
+pub use Face::*;
+use bevy::math::U64Vec3;
+use bevy::prelude::*;
 use bit_iter::BitIter;
 use bytemuck::{Pod, Zeroable};
 use enum_map::{Enum, EnumMap};
-
-pub use Face::*;
 
 use crate::chunk::index::Index3d;
 

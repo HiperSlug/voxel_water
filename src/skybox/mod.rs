@@ -1,7 +1,7 @@
-use bevy::{
-    asset::{embedded_asset, load_embedded_asset},
-    prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureViewDimension},
+use bevy::asset::{embedded_asset, load_embedded_asset};
+use bevy::prelude::*;
+use bevy::render::render_resource::{
+    Extent3d, TextureDimension, TextureFormat, TextureViewDimension,
 };
 
 pub struct SkyboxImagePlugin;

@@ -1,8 +1,9 @@
-use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
-use bevy::prelude::*;
 use std::time::Duration;
 
-use crate::block::{GRASS, DIRT, WATER};
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
+use bevy::prelude::*;
+
+use crate::block::{DIRT, GRASS, WATER};
 use crate::chunk::BoxChunk;
 use crate::flycam::FlyCam;
 use crate::render::ChunkMeshChanges;

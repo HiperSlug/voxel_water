@@ -1,10 +1,12 @@
 #![allow(dead_code)]
 
+use std::time::Duration;
+
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::prelude::*;
 use bevy_tweening::{Lens, Tween, TweenAnim, TweeningPlugin};
-use rand::{rng, seq::IndexedRandom};
-use std::time::Duration;
+use rand::rng;
+use rand::seq::IndexedRandom;
 
 pub struct JumpscarePlugin;
 

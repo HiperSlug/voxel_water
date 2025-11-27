@@ -3,10 +3,13 @@ A cellular based water simulation in a voxel grid. It's governed by simple gravi
 
 I'm using [Bevy](https://bevy.org/) for basically everything else.
 
-[VIDEO](https://youtu.be/WJV30a9Xn5w) \
-[ITCH](https://hiperslug.itch.io/magic)
+[VIDEO DEMO](https://youtu.be/WJV30a9Xn5w) \
+[ITCH DEMO](https://hiperslug.itch.io/magic)
 
-I was finally to be rid of this project and then the theme was *grid*...
+# Issues
+People have had issues 
+1. Crashing
+2. Performance
 
 # Update #5
 This is the continuation of my voxel water project.
@@ -20,8 +23,3 @@ I also completely switched up the data stored in a voxel. I had been storing a h
 I also tried to finish transparency but it just wasn't working and I didn't spend the time to figure it out.
 
 I also made a rendering change that *might* fix the crashing. Idk though as I'm not experiencing the bug myself.
-
-# Issues
-People have had issues 
-1. Crashing
-2. Performance

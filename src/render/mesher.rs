@@ -1,16 +1,15 @@
 // TODO: transparency
 
-use bevy::prelude::*;
-use enum_map::{EnumMap, enum_map};
 use std::cell::RefCell;
 use std::ops::Range;
 
-use super::*;
+use bevy::prelude::*;
+use enum_map::{EnumMap, enum_map};
 
-use crate::{
-    block::BLOCKS,
-    chunk::{AREA, Chunk, LEN, LEN_U32, PAD_MASK, index::*},
-};
+use super::*;
+use crate::block::BLOCKS;
+use crate::chunk::index::*;
+use crate::chunk::{AREA, Chunk, LEN, LEN_U32, PAD_MASK};
 
 const UPWARD_STRIDE_X: usize = STRIDE_X_3D;
 const FORWARD_STRIDE_X: usize = STRIDE_X_3D;

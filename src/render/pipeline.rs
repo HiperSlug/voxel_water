@@ -1,7 +1,8 @@
 use bevy::asset::{embedded_asset, load_embedded_asset};
 use bevy::core_pipeline::core_3d::Transparent3d;
 use bevy::ecs::query::QueryItem;
-use bevy::ecs::system::{SystemParamItem, lifetimeless::SRes};
+use bevy::ecs::system::SystemParamItem;
+use bevy::ecs::system::lifetimeless::SRes;
 use bevy::mesh::{MeshVertexBufferLayoutRef, VertexBufferLayout, VertexFormat};
 use bevy::pbr::{
     MeshPipeline, MeshPipelineKey, RenderMeshInstances, SetMeshBindGroup, SetMeshViewBindGroup,
@@ -9,7 +10,8 @@ use bevy::pbr::{
 };
 use bevy::prelude::*;
 use bevy::render::extract_component::{ExtractComponent, ExtractComponentPlugin};
-use bevy::render::mesh::{RenderMesh, RenderMeshBufferInfo, allocator::MeshAllocator};
+use bevy::render::mesh::allocator::MeshAllocator;
+use bevy::render::mesh::{RenderMesh, RenderMeshBufferInfo};
 use bevy::render::render_asset::RenderAssets;
 use bevy::render::render_phase::{
     AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
@@ -161,7 +163,7 @@ fn queue_quads(
             };
             let key =
                 view_key | MeshPipelineKey::from_primitive_topology(mesh.primitive_topology());
-            
+
             // let key = key | MeshPipelineKey::OIT_ENABLED | MeshPipelineKey::BLEND_ALPHA;
 
             let pipeline = pipelines
@@ -268,10 +270,10 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
         _: (),
         _: Option<()>,
         (meshes, render_mesh_instances, mesh_allocator, bind_group, instance_buffer): SystemParamItem<
-            'w,
-            '_,
-            Self::Param,
-        >,
+			'w,
+			'_,
+			Self::Param,
+		>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         // A borrow check workaround.

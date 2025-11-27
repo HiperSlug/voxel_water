@@ -2,11 +2,10 @@ pub mod index;
 mod liquid_tick;
 mod row;
 
-use bevy::prelude::*;
 use std::mem;
 
+use bevy::prelude::*;
 use index::{Index2d, Index3d};
-
 pub use row::*;
 
 use crate::block::BlockIndex;

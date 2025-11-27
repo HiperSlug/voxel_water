@@ -1,9 +1,7 @@
-use bevy::{
-    asset::{embedded_asset, load_embedded_asset},
-    image::ImageAddressMode,
-    prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
-};
+use bevy::asset::{embedded_asset, load_embedded_asset};
+use bevy::image::ImageAddressMode;
+use bevy::prelude::*;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
 pub struct TextureArrayPlugin;
 
