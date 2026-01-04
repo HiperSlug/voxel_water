@@ -5,6 +5,7 @@ mod input;
 mod render;
 mod skybox;
 mod texture_array;
+mod mult;
 
 use std::f32::consts::PI;
 
@@ -21,36 +22,32 @@ use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::input::{GameInputPlugin, SelectedMarker};
 use crate::render::mesher::MESHER;
 use crate::render::pipeline::{QuadInstancingPlugin, TextureArrayMaterial};
-use crate::render::{ChunkMesh, ChunkMeshChanges};
+use crate::render::{ChunkMesh, ChunkRemesh};
 use crate::skybox::{SkyboxHandle, SkyboxImagePlugin};
 use crate::texture_array::{TextureArrayHandle, TextureArrayPlugin};
 
 fn main() {
-    App::new().add_plugins(Game).run();
-}
+    let mut app = App::new();
 
-struct Game;
+    app.add_plugins((
+        DefaultPlugins,
+        NoCameraPlayerPlugin,
+        GameInputPlugin,
+        QuadInstancingPlugin,
+        SkyboxImagePlugin,
+        TextureArrayPlugin,
+    ));
 
-impl Plugin for Game {
-    fn build(&self, app: &mut App) {
-        app.add_plugins((
-            DefaultPlugins,
-            NoCameraPlayerPlugin,
-            GameInputPlugin,
-            QuadInstancingPlugin,
-            SkyboxImagePlugin,
-            TextureArrayPlugin,
-        ));
+    app.insert_resource(Time::<Fixed>::from_hz(10.0))
+        .init_state::<GameState>()
+        .add_systems(Update, setup.run_if(in_state(GameState::Setup)))
+        .add_systems(
+            FixedUpdate,
+            liquid_tick.run_if(in_state(GameState::NotSetup)),
+        )
+        .add_systems(Update, remesh_chunk.run_if(in_state(GameState::NotSetup)));
 
-        app.insert_resource(Time::<Fixed>::from_hz(10.0))
-            .init_state::<GameState>()
-            .add_systems(Update, setup.run_if(in_state(GameState::Setup)))
-            .add_systems(
-                FixedUpdate,
-                liquid_tick.run_if(in_state(GameState::NotSetup)),
-            )
-            .add_systems(Update, remesh_chunk.run_if(in_state(GameState::NotSetup)));
-    }
+    app.run();
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, States, Default)]
@@ -64,6 +61,8 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+
+    // conditional
     skybox_handle: If<Res<SkyboxHandle>>,
     texture_array_handle: If<Res<TextureArrayHandle>>,
 ) {
@@ -118,7 +117,7 @@ fn setup(
     commands.spawn((
         chunk,
         mesh,
-        ChunkMeshChanges::default(),
+        ChunkRemesh::default(),
         Mesh3d(meshes.add(Rectangle::from_length(1.))),
         NoFrustumCulling,
         TextureArrayMaterial {
@@ -132,7 +131,7 @@ fn setup(
 }
 
 fn liquid_tick(
-    chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>,
+    chunk: Single<(&mut BoxChunk, &mut ChunkRemesh)>,
     mut tick: Local<u64>,
     dst_to_src: Local<DashMap<usize, usize>>,
 ) {
@@ -154,7 +153,7 @@ fn liquid_tick(
     *tick += 1;
 }
 
-fn remesh_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkMeshChanges)>) {
+fn remesh_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkRemesh)>) {
     let (chunk, mut mesh, mut changes) = chunk.into_inner();
 
     if changes.is_empty() {

@@ -421,7 +421,7 @@ impl Mesher {
         chunk: &Chunk,
         origin: IVec3,
         mesh: &mut ChunkMesh,
-        changes: ChunkMeshChanges,
+        changes: ChunkRemesh,
     ) {
         let remesh = changes.0.map(|x| (x | x << 1 | x >> 1) & !PAD_MASK);
 
@@ -491,7 +491,6 @@ impl Mesher {
     }
 }
 
-#[inline]
 fn key_range(slice: &[Quad], key: impl Fn(&Quad) -> i32, k: i32) -> Range<usize> {
     let start = slice.partition_point(|q| key(q) < k);
     let len = slice[start..].partition_point(|q| key(q) == k);
@@ -499,7 +498,6 @@ fn key_range(slice: &[Quad], key: impl Fn(&Quad) -> i32, k: i32) -> Range<usize>
     start..end
 }
 
-#[inline]
 fn u32(usize: usize) -> u32 {
     usize as u32
 }

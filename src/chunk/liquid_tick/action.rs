@@ -6,13 +6,11 @@ type ActionGroup = [Action; 4];
 pub struct Delta([isize; 3]);
 
 impl Delta {
-    #[inline]
     pub fn i_3d(&self) -> isize {
         let [x, y, z] = self.0;
         x * I_STRIDE_X_3D + y * I_STRIDE_Y_3D + z * I_STRIDE_Z_3D
     }
 
-    #[inline]
     pub fn x_and_i_2d(&self) -> (isize, isize) {
         let [x, y, z] = self.0;
         (x, y * I_STRIDE_Y_2D + z * I_STRIDE_Z_2D)

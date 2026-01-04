@@ -27,7 +27,6 @@ pub struct Quad {
 }
 
 impl Quad {
-    #[inline]
     pub fn new(pos: IVec3, w: u32, h: u32, f: Face, t: u32) -> Self {
         debug_assert!(w <= MAX6, "width: {w} > {MAX6}");
         debug_assert!(h <= MAX6, "height: {h} > {MAX6}");
@@ -45,7 +44,6 @@ impl Quad {
     }
 }
 
-#[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Enum)]
 pub enum Face {
     PosX = 0,
@@ -64,32 +62,27 @@ impl Face {
 pub struct ChunkMesh(pub EnumMap<Face, Vec<Quad>>);
 
 impl ChunkMesh {
-    #[inline]
     pub fn len(&self) -> usize {
         self.0.values().map(|vec| vec.len()).sum()
     }
 
-    #[inline]
     pub fn quads(&self) -> impl Iterator<Item = &Quad> {
         self.0.values().flat_map(|vec| vec.iter())
     }
 }
 
 #[derive(Component, Default, Clone, Copy)]
-pub struct ChunkMeshChanges(pub U64Vec3);
+pub struct ChunkRemesh(pub U64Vec3);
 
-impl ChunkMeshChanges {
-    #[inline]
+impl ChunkRemesh {
     pub fn clear(&mut self) {
         self.0 = U64Vec3::ZERO
     }
 
-    #[inline]
     pub fn is_empty(&self) -> bool {
         self.0 == U64Vec3::ZERO
     }
 
-    #[inline]
     pub fn push(&mut self, p: impl Index3d) {
         let [x, y, z] = p.xyz();
         self.0.x |= 1 << x;

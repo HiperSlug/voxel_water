@@ -23,14 +23,12 @@ pub struct Blocks(pub Vec<Block>);
 impl Index<BlockIndex> for Blocks {
     type Output = Block;
 
-    #[inline]
     fn index(&self, index: BlockIndex) -> &Self::Output {
         &self.0[index.get()]
     }
 }
 
 impl IndexMut<BlockIndex> for Blocks {
-    #[inline]
     fn index_mut(&mut self, index: BlockIndex) -> &mut Self::Output {
         &mut self.0[index.get()]
     }
@@ -40,7 +38,6 @@ impl IndexMut<BlockIndex> for Blocks {
 pub struct BlockIndex(pub NonMaxU16);
 
 impl BlockIndex {
-    #[inline]
     pub fn get(self) -> usize {
         self.0.get() as usize
     }

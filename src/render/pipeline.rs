@@ -263,7 +263,6 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
     type ViewQuery = ();
     type ItemQuery = ();
 
-    #[inline]
     fn render<'w>(
         // It seems this function is never getting called.
         item: &P,

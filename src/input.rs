@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use crate::block::{DIRT, GRASS, WATER};
 use crate::chunk::BoxChunk;
 use crate::flycam::FlyCam;
-use crate::render::ChunkMeshChanges;
+use crate::render::ChunkRemesh;
 
 const MIN_TIMESTEP: Duration = Duration::from_nanos(500_000);
 const MAX_TIMESTEP: Duration = Duration::from_secs(2);
@@ -24,7 +24,7 @@ pub struct SelectedMarker;
 
 fn chunk_input(
     mut transforms: Query<&mut Transform>,
-    chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>,
+    chunk: Single<(&mut BoxChunk, &mut ChunkRemesh)>,
     selected: Single<(Entity, &mut Visibility), With<SelectedMarker>>,
     player: Single<Entity, With<FlyCam>>,
     input: Res<ButtonInput<MouseButton>>,
