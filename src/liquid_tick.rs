@@ -10,8 +10,8 @@ use dashmap::DashMap;
 use rand::rng;
 use rand::seq::SliceRandom;
 
-use super::index::{Index2d, Index3d};
-use super::{Chunk, LEN_U32, PAD_MASK};
+use super::voxels::chunk::Chunk;
+use crate::voxels::space::{Index2d, Index3d, LEN_U32, PAD_MASK};
 
 impl Chunk {
     pub fn collect_moves(&self, dst_to_src: &DashMap<usize, usize>, tick: u64) {
@@ -22,7 +22,7 @@ impl Chunk {
             'row: for y in 1..LEN_U32 - 1 {
                 let i_2d = [y, z].i_2d();
 
-                let mut liquid = self.masks[i_2d].liquid & !PAD_MASK;
+                let mut liquid = self.liquid[i_2d] & !PAD_MASK;
 
                 if liquid == 0 {
                     continue 'row;
@@ -90,14 +90,14 @@ impl Chunk {
         for prereq in *prereqs {
             let (d_x, d_i_2d) = prereq.delta.x_and_i_2d();
             let i_2d = src_i_2d.wrapping_add_signed(d_i_2d);
-            let mask = self.masks[i_2d].occupied.inv_shift(d_x);
+            let mask = self.occupied[i_2d].inv_shift(d_x);
 
             prereq_mask &= if prereq.not { !mask } else { mask };
         }
 
         let dst_i_2d = src_i_2d.wrapping_add_signed(d_i_2d);
 
-        let try_move = group & prereq_mask & !self.masks[dst_i_2d].occupied.inv_shift(d_x);
+        let try_move = group & prereq_mask & !self.occupied[dst_i_2d].inv_shift(d_x);
 
         for x in BitIter::from(try_move) {
             let src_i_3d = (x, src_i_2d).i_3d();

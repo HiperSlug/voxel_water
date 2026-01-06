@@ -1,23 +1,20 @@
-mod block;
-mod chunk;
 mod flycam;
 mod input;
+mod liquid_tick;
 mod render;
 mod skybox;
 mod texture_array;
-mod mult;
+mod voxels;
 
 use std::f32::consts::PI;
 
-use bevy::camera::visibility::NoFrustumCulling;
+// use bevy::camera::visibility::NoFrustumCulling;
 use bevy::core_pipeline::Skybox;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 use bevy::render::view::NoIndirectDrawing;
 use dashmap::DashMap;
 
-use crate::block::DIRT;
-use crate::chunk::BoxChunk;
 use crate::flycam::{FlyCam, NoCameraPlayerPlugin};
 use crate::input::{GameInputPlugin, SelectedMarker};
 use crate::render::mesher::MESHER;
@@ -40,12 +37,12 @@ fn main() {
 
     app.insert_resource(Time::<Fixed>::from_hz(10.0))
         .init_state::<GameState>()
-        .add_systems(Update, setup.run_if(in_state(GameState::Setup)))
-        .add_systems(
-            FixedUpdate,
-            liquid_tick.run_if(in_state(GameState::NotSetup)),
-        )
-        .add_systems(Update, remesh_chunk.run_if(in_state(GameState::NotSetup)));
+        .add_systems(Update, setup.run_if(in_state(GameState::Setup)));
+        // .add_systems(
+        //     FixedUpdate,
+        //     liquid_tick.run_if(in_state(GameState::NotSetup)),
+        // )
+        // .add_systems(Update, remesh_chunk.run_if(in_state(GameState::NotSetup)));
 
     app.run();
 }
@@ -95,12 +92,12 @@ fn setup(
         NoIndirectDrawing, // TODO: what does this do?
     ));
 
-    // chunk aabb
-    commands.spawn((
-        Mesh3d(meshes.add(cube_wireframe_mesh(62.))),
-        MeshMaterial3d(materials.add(Color::WHITE)),
-        Transform::from_xyz(32.0, 32.0, 32.0),
-    ));
+    // // chunk aabb
+    // commands.spawn((
+    //     Mesh3d(meshes.add(cube_wireframe_mesh(62.))),
+    //     MeshMaterial3d(materials.add(Color::WHITE)),
+    //     Transform::from_xyz(32.0, 32.0, 32.0),
+    // ));
 
     // selected aabb
     commands.spawn((
@@ -111,61 +108,67 @@ fn setup(
     ));
 
     // chunk
-    let mut chunk = BoxChunk::default();
-    chunk.fill_padding(DIRT);
-    let mesh = MESHER.with_borrow_mut(|mesher| mesher.mesh(&chunk, IVec3::ZERO));
-    commands.spawn((
-        chunk,
-        mesh,
-        ChunkRemesh::default(),
-        Mesh3d(meshes.add(Rectangle::from_length(1.))),
-        NoFrustumCulling,
-        TextureArrayMaterial {
-            handle: texture_array_handle.clone(),
-        },
-    ));
+    // let mut chunks = SparseChunks::default();
+    // let mut chunk_meshes = SparseChunkMeshes::default();
 
-    commands.remove_resource::<SkyboxHandle>();
-    commands.remove_resource::<TextureArrayHandle>();
-    commands.set_state(GameState::NotSetup);
+    // chunks.fill(ivec3(0, 0, 0), ivec3(0, 0, 0), Some(DIRT));
+    // chunks.fill_padding(DIRT);
+    // let mesh = MESHER.with_borrow_mut(|mesher| mesher.mesh(&chunk, IVec3::ZERO));
+
+    // commands.spawn((
+    //     // data
+    //     chunks,
+    //     chunk_meshes,
+    //     SparseChunkRemeshes::default(),
+    //     // rendering
+    //     Mesh3d(meshes.add(Rectangle::from_length(1.))),
+    //     NoFrustumCulling,
+    //     TextureArrayMaterial {
+    //         handle: texture_array_handle.clone(),
+    //     },
+    // ));
+
+    // commands.remove_resource::<SkyboxHandle>();
+    // commands.remove_resource::<TextureArrayHandle>();
+    // commands.set_state(GameState::NotSetup);
 }
 
-fn liquid_tick(
-    chunk: Single<(&mut BoxChunk, &mut ChunkRemesh)>,
-    mut tick: Local<u64>,
-    dst_to_src: Local<DashMap<usize, usize>>,
-) {
-    let (mut chunk, mut changes) = chunk.into_inner();
+// fn liquid_tick(
+//     chunk: Single<(&mut BoxChunk, &mut ChunkRemesh)>,
+//     mut tick: Local<u64>,
+//     dst_to_src: Local<DashMap<usize, usize>>,
+// ) {
+//     let (mut chunk, mut changes) = chunk.into_inner();
 
-    chunk.collect_moves(&dst_to_src, *tick);
+//     chunk.collect_moves(&dst_to_src, *tick);
 
-    for k_v in dst_to_src.iter() {
-        let (&dst, &src) = k_v.pair();
+//     for k_v in dst_to_src.iter() {
+//         let (&dst, &src) = k_v.pair();
 
-        chunk.transfer(dst, src);
+//         chunk.transfer(dst, src);
 
-        changes.push(dst);
-        changes.push(src);
-    }
+//         changes.push(dst);
+//         changes.push(src);
+//     }
 
-    dst_to_src.clear();
+//     dst_to_src.clear();
 
-    *tick += 1;
-}
+//     *tick += 1;
+// }
 
-fn remesh_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkRemesh)>) {
-    let (chunk, mut mesh, mut changes) = chunk.into_inner();
+// fn remesh_chunk(chunk: Single<(&BoxChunk, &mut ChunkMesh, &mut ChunkRemesh)>) {
+//     let (chunk, mut mesh, mut changes) = chunk.into_inner();
 
-    if changes.is_empty() {
-        return;
-    }
+//     if changes.is_empty() {
+//         return;
+//     }
 
-    MESHER.with_borrow_mut(|mesher| {
-        mesher.remesh(chunk, IVec3::ZERO, &mut mesh, *changes);
-    });
+//     MESHER.with_borrow_mut(|mesher| {
+//         mesher.remesh(chunk, IVec3::ZERO, &mut mesh, *changes);
+//     });
 
-    changes.clear();
-}
+//     changes.clear();
+// }
 
 // AI
 pub fn cube_wireframe_mesh(size: f32) -> Mesh {

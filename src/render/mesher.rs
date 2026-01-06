@@ -7,9 +7,9 @@ use bevy::prelude::*;
 use enum_map::{EnumMap, enum_map};
 
 use super::*;
-use crate::block::BLOCKS;
-use crate::chunk::index::*;
-use crate::chunk::{AREA, Chunk, LEN, LEN_U32, PAD_MASK};
+use crate::voxels::block::BLOCKS;
+use crate::voxels::chunk::Chunk;
+use crate::voxels::space::*;
 
 const UPWARD_STRIDE_X: usize = STRIDE_X_3D;
 const FORWARD_STRIDE_X: usize = STRIDE_X_3D;
@@ -64,8 +64,10 @@ impl InnerMesher {
                 for y in 1..LEN_U32 - 1 {
                     let i_2d = [y, z].i_2d();
 
-                    let pad_opaque = chunk.masks[i_2d].opaque;
-                    let transparent = chunk.masks[i_2d].transparent & !PAD_MASK;
+                    let pad_transparent = chunk.transparent[i_2d];
+                    let pad_opaque = chunk.occupied[i_2d] & !pad_transparent;
+
+                    let transparent = pad_transparent & !PAD_MASK;
                     let opaque = pad_opaque & !PAD_MASK;
 
                     if opaque == 0 && transparent == 0 {
@@ -75,11 +77,11 @@ impl InnerMesher {
 
                     let adj_opaque = match f {
                         PosX => pad_opaque >> 1,
-                        PosY => chunk.masks[i_2d + STRIDE_Y_2D].opaque,
-                        PosZ => chunk.masks[i_2d + STRIDE_Z_2D].opaque,
+                        PosY => chunk.transparent[i_2d + STRIDE_Y_2D] & !chunk.occupied[i_2d + STRIDE_Y_2D],
+                        PosZ => chunk.transparent[i_2d + STRIDE_Z_2D] & !chunk.occupied[i_2d + STRIDE_Z_2D],
                         NegX => pad_opaque << 1,
-                        NegY => chunk.masks[i_2d - STRIDE_Y_2D].opaque,
-                        NegZ => chunk.masks[i_2d - STRIDE_Z_2D].opaque,
+                        NegY => chunk.transparent[i_2d - STRIDE_Y_2D] & !chunk.occupied[i_2d - STRIDE_Y_2D],
+                        NegZ => chunk.transparent[i_2d - STRIDE_Z_2D] & !chunk.occupied[i_2d - STRIDE_Z_2D],
                     };
 
                     visible_mask[i_2d] = opaque & !adj_opaque;
@@ -119,8 +121,10 @@ impl InnerMesher {
             let mut handler = |y: u32, z: u32, xs: u64| {
                 let i_2d = [y, z].i_2d();
 
-                let pad_opaque = chunk.masks[i_2d].opaque & xs;
-                let transparent = chunk.masks[i_2d].transparent & !PAD_MASK & xs;
+                let pad_transparent = chunk.transparent[i_2d] & xs;
+                let pad_opaque = chunk.occupied[i_2d] & !pad_transparent & xs;
+
+                let transparent = pad_transparent & !PAD_MASK;
                 let opaque = pad_opaque & !PAD_MASK;
 
                 if opaque == 0 && transparent == 0 {
@@ -130,11 +134,11 @@ impl InnerMesher {
 
                 let adj_opaque = match f {
                     PosX => pad_opaque >> 1,
-                    PosY => chunk.masks[i_2d + STRIDE_Y_2D].opaque,
-                    PosZ => chunk.masks[i_2d + STRIDE_Z_2D].opaque,
+                    PosY => chunk.transparent[i_2d + STRIDE_Y_2D] & !chunk.occupied[i_2d + STRIDE_Y_2D],
+                    PosZ => chunk.transparent[i_2d + STRIDE_Z_2D] & !chunk.occupied[i_2d + STRIDE_Z_2D],
                     NegX => pad_opaque << 1,
-                    NegY => chunk.masks[i_2d - STRIDE_Y_2D].opaque,
-                    NegZ => chunk.masks[i_2d - STRIDE_Z_2D].opaque,
+                    NegY => chunk.transparent[i_2d - STRIDE_Y_2D] & !chunk.occupied[i_2d - STRIDE_Y_2D],
+                    NegZ => chunk.transparent[i_2d - STRIDE_Z_2D] & !chunk.occupied[i_2d - STRIDE_Z_2D],
                 };
 
                 visible_mask[i_2d] = opaque & !adj_opaque;
@@ -152,20 +156,20 @@ impl InnerMesher {
                 }
             };
 
-            for z in BitIter::from(remesh.z).map(u32) {
+            for z in BitIter::from(remesh.z).map(as_u32) {
                 for y in 1..LEN_U32 - 1 {
                     handler(y, z, !0)
                 }
             }
 
-            for z in BitIter::from(other_z).map(u32) {
-                for y in BitIter::from(remesh.y).map(u32) {
+            for z in BitIter::from(other_z).map(as_u32) {
+                for y in BitIter::from(remesh.y).map(as_u32) {
                     handler(y, z, !0)
                 }
             }
 
-            for z in BitIter::from(other_z).map(u32) {
-                for y in BitIter::from(other_y).map(u32) {
+            for z in BitIter::from(other_z).map(as_u32) {
+                for y in BitIter::from(other_y).map(as_u32) {
                     handler(y, z, remesh.x)
                 }
             }
@@ -450,7 +454,7 @@ impl Mesher {
                     self.inner.merge_y(
                         chunk,
                         origin,
-                        BitIter::from(remesh.y).map(u32),
+                        BitIter::from(remesh.y).map(as_u32),
                         f,
                         &mut self.quads,
                     );
@@ -470,7 +474,7 @@ impl Mesher {
                     self.inner.merge_z(
                         chunk,
                         origin,
-                        BitIter::from(remesh.z).map(u32),
+                        BitIter::from(remesh.z).map(as_u32),
                         f,
                         &mut self.quads,
                     );
@@ -498,6 +502,6 @@ fn key_range(slice: &[Quad], key: impl Fn(&Quad) -> i32, k: i32) -> Range<usize>
     start..end
 }
 
-fn u32(usize: usize) -> u32 {
+fn as_u32(usize: usize) -> u32 {
     usize as u32
 }

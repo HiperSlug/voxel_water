@@ -1,4 +1,4 @@
-use super::super::index::*;
+use crate::voxels::space::*;
 
 pub type Action = (Delta, &'static [PreReq]);
 type ActionGroup = [Action; 4];

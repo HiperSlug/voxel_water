@@ -8,7 +8,7 @@ use bit_iter::BitIter;
 use bytemuck::{Pod, Zeroable};
 use enum_map::{Enum, EnumMap};
 
-use crate::chunk::index::Index3d;
+use crate::voxels::space::Index3d;
 
 const MAX6: u32 = (1 << 6) - 1;
 const MAX16: u32 = u16::MAX as u32;
