@@ -3,7 +3,7 @@
 
 use bevy::input::mouse::MouseMotion;
 use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow};
+use bevy::window::{CursorGrabMode, CursorOptions, PrimaryWindow, WindowFocused};
 
 pub mod prelude {
     pub use crate::*;
@@ -87,6 +87,18 @@ fn setup_player(mut commands: Commands) {
         Transform::from_xyz(0.0, 0.0, -5.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }
+
+fn handle_unfocus(mut focused: MessageReader<WindowFocused>, mut primary: Query<(Entity, &mut CursorOptions), With<PrimaryWindow>>) {
+    let (primary, mut opts) = primary.single_mut().unwrap();
+    for focused in focused.read() {
+        info!("lost focus");
+        if focused.window == primary && !focused.focused {
+            opts.grab_mode = CursorGrabMode::None;
+            opts.visible = true;
+        }
+    }
+}
+
 
 /// Handles keyboard input and movement
 fn player_move(
@@ -223,7 +235,8 @@ impl Plugin for NoCameraPlayerPlugin {
             .add_systems(Update, player_move)
             .add_systems(Update, player_look)
             .add_systems(Update, cursor_grab)
-            .add_systems(Update, request_pointer_lock_on_click);
+            .add_systems(Update, request_pointer_lock_on_click)
+            .add_systems(Update, handle_unfocus);
     }
 }
 
@@ -232,7 +245,7 @@ fn request_pointer_lock_on_click(
     mut window: Single<&mut CursorOptions, With<PrimaryWindow>>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
 ) {
-    if mouse_button_input.just_pressed(MouseButton::Left) {
+    if mouse_button_input.any_just_pressed([MouseButton::Left, MouseButton::Middle]) {
         // Only works if this is the direct response to user input
         window.grab_mode = CursorGrabMode::Locked;
         window.visible = false;

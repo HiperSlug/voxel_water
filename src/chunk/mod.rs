@@ -167,5 +167,14 @@ impl Chunk {
     }
 }
 
-#[derive(Component, Deref, DerefMut, Default)]
+#[derive(Component, Deref, DerefMut)]
 pub struct BoxChunk(Box<Chunk>);
+
+impl Default for BoxChunk {
+    fn default() -> Self {
+        Self(Box::new(Chunk {
+            voxels: [None; VOL],
+            masks: [RowMasks::default(); AREA],
+        }))
+    }
+}

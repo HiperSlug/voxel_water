@@ -29,3 +29,6 @@ target
 # Added by me
 out/
 out.zip
+pkg/
+index.html
+out1/

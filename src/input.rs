@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+// use bevy::camera_controller::free_camera::FreeCamera;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 
@@ -27,7 +28,8 @@ fn chunk_input(
     chunk: Single<(&mut BoxChunk, &mut ChunkMeshChanges)>,
     selected: Single<(Entity, &mut Visibility), With<SelectedMarker>>,
     player: Single<Entity, With<FlyCam>>,
-    input: Res<ButtonInput<MouseButton>>,
+    mouse_input: Res<ButtonInput<MouseButton>>,
+    key_input: Res<ButtonInput<KeyCode>>,
     mut anchor: Local<UVec3>,
 ) {
     let (mut chunk, mut changes) = chunk.into_inner();
@@ -43,14 +45,13 @@ fn chunk_input(
     let (entity, mut visibility) = selected.into_inner();
     let mut transform = transforms.get_mut(entity).unwrap();
 
-    if input.pressed(MouseButton::Middle)
-        && let Some(p) = prev
-    {
-        chunk.set(p, WATER);
-        changes.push(p);
+    if key_input.pressed(KeyCode::KeyV)
+        && let Some(p) = prev {
+            chunk.set(p, WATER);
+            changes.push(p);
     }
 
-    if input.just_pressed(MouseButton::Left)
+    if mouse_input.just_pressed(MouseButton::Left)
         && let Some(p) = dst
     {
         chunk.remove(p);
@@ -58,7 +59,7 @@ fn chunk_input(
     }
 
     if let Some(p) = prev.or(dst) {
-        if input.just_released(MouseButton::Right) {
+        if mouse_input.just_released(MouseButton::Right) {
             let min = p.min(*anchor);
             let max = p.max(*anchor);
 
@@ -98,7 +99,7 @@ fn chunk_input(
             }
         }
 
-        if !input.pressed(MouseButton::Right) {
+        if !mouse_input.pressed(MouseButton::Right) {
             *anchor = p;
         }
 

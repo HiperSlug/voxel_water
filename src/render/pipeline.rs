@@ -18,9 +18,7 @@ use bevy::render::render_phase::{
     RenderCommandResult, SetItemPipeline, TrackedRenderPass, ViewSortedRenderPhases,
 };
 use bevy::render::render_resource::{
-    AsBindGroup, BindGroup, BindGroupLayout, Buffer, BufferInitDescriptor, BufferUsages,
-    PipelineCache, RenderPipelineDescriptor, SpecializedMeshPipeline, SpecializedMeshPipelineError,
-    SpecializedMeshPipelines, VertexAttribute, VertexStepMode,
+    AsBindGroup, BindGroup, BindGroupLayoutDescriptor, Buffer, BufferInitDescriptor, BufferUsages, PipelineCache, RenderPipelineDescriptor, SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines, VertexAttribute, VertexStepMode
 };
 use bevy::render::renderer::{RenderDevice, RenderQueue};
 use bevy::render::storage::GpuShaderStorageBuffer;
@@ -63,7 +61,7 @@ impl Plugin for QuadInstancingPlugin {
 struct QuadInstancingPipeline {
     shader: Handle<Shader>,
     mesh_pipeline: MeshPipeline,
-    layout: BindGroupLayout,
+    layout: BindGroupLayoutDescriptor,
 }
 
 fn init_custom_pipeline(
@@ -75,7 +73,7 @@ fn init_custom_pipeline(
     commands.insert_resource(QuadInstancingPipeline {
         shader: load_embedded_asset!(&*asset_server, "quad.wgsl"),
         mesh_pipeline: mesh_pipeline.clone(),
-        layout: TextureArrayMaterial::bind_group_layout(&render_device),
+        layout: TextureArrayMaterial::bind_group_layout_descriptor(&render_device),
     });
 }
 
@@ -173,7 +171,7 @@ fn queue_quads(
                 entity: (entity, *main_entity),
                 pipeline,
                 draw_function: draw_custom,
-                distance: rangefinder.distance_translation(&mesh_instance.translation),
+                distance: rangefinder.distance(&mesh_instance.center),
                 batch_range: 0..1,
                 extra_index: PhaseItemExtraIndex::None,
                 indexed: true,
@@ -229,12 +227,15 @@ fn prepare_bind_group(
     gpu_images: Res<RenderAssets<GpuImage>>,
     fallback_image: Res<FallbackImage>,
     gpu_shader_storage_buffer: Res<RenderAssets<GpuShaderStorageBuffer>>,
+    pipeline_cache: Res<PipelineCache>,
 ) {
+    
     if let None = bind_group.0 {
         bind_group.0 = material
             .as_bind_group(
                 &pipeline.layout,
                 &render_device,
+                &pipeline_cache,
                 &mut (gpu_images, fallback_image, gpu_shader_storage_buffer),
             )
             .ok()
@@ -322,7 +323,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawMeshInstanced {
                     return RenderCommandResult::Skip;
                 };
 
-                pass.set_index_buffer(index_buffer_slice.buffer.slice(..), 0, *index_format);
+                pass.set_index_buffer(index_buffer_slice.buffer.slice(..), *index_format);
                 pass.draw_indexed(
                     index_buffer_slice.range.start..(index_buffer_slice.range.start + count),
                     vertex_buffer_slice.range.start as i32,
